@@ -29,9 +29,12 @@ Requires: pandas, yfinance  (pip install pandas yfinance)
 """
 
 import json
+import os
 import sys
 import urllib.request
 from datetime import datetime, timezone
+
+FRED_API_KEY = os.environ.get('FRED_API_KEY', '').strip()
 
 try:
     import pandas as pd
@@ -96,6 +99,30 @@ def clamp(x, lo, hi):
 
 
 def fetch_fred_full(series_id, cosd='2015-01-01'):
+    """Uses FRED's official JSON API when FRED_API_KEY is set (same
+    reliability rationale as refresh_model.py); falls back to the public
+    CSV export endpoint otherwise."""
+    if FRED_API_KEY:
+        url = (f'https://api.stlouisfed.org/fred/series/observations'
+               f'?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json'
+               f'&observation_start={cosd}')
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode('utf-8', errors='replace'))
+        rows = []
+        for obs in data.get('observations', []):
+            v = obs.get('value')
+            if v in (None, '.', ''):
+                continue
+            try:
+                rows.append((pd.Timestamp(obs['date']), float(v)))
+            except (ValueError, KeyError):
+                continue
+        if not rows:
+            return pd.Series(dtype=float)
+        dates, vals = zip(*rows)
+        return pd.Series(vals, index=pd.DatetimeIndex(dates)).sort_index()
+
     url = f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}&cosd={cosd}'
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=30) as resp:
