@@ -6,6 +6,7 @@ on:
 jobs:
   backtest:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -14,6 +15,8 @@ jobs:
       - name: Install dependencies
         run: pip install pandas yfinance
       - name: Run backtest
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python3 backtest_asset_outlook.py
       - name: Commit results
         run: |
