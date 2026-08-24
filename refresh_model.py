@@ -176,6 +176,14 @@ def compute_model(S, E):
     walcl, walclP5, walclP20 = L('WALCL'), P5('WALCL'), P20('WALCL')
     wresbal, wresbalP5, wresbalP20 = L('WRESBAL'), P5('WRESBAL'), P20('WRESBAL')
     wtregen, wtregenP5, wtregenP20 = L('WTREGEN'), P5('WTREGEN'), P20('WTREGEN')
+    # FIX (unit mismatch): WALCL/WRESBAL/WTREGEN are reported by FRED in $ millions.
+    # The Fed Balance Sheet threshold (7,000,000) is already written on that same
+    # millions scale, so it needs no change. Bank Reserves (threshold 3,000) and
+    # Treasury General Account (threshold 500) were written as if the input were
+    # in $ billions -- three orders of magnitude off, which is why Bank Reserves
+    # was pinned at 0 and TGA was pinned at 100 in the original workbook. Dividing
+    # by 1000 to convert millions -> billions before scoring restores both to a
+    # normal, non-saturated range.
     fedBsScore = clamp(50 - (walcl - 7000000) / 40000, 0, 100) if walcl is not None else None
     reservesScore = clamp(50 - (wresbal/1000 - 3000) / 20, 0, 100) if wresbal is not None else None
     tgaScore = clamp(20 + (wtregen/1000 - 500) / 10, 0, 100) if wtregen is not None else None
@@ -240,6 +248,31 @@ def compute_model(S, E):
     breadthStress = clamp(50 - (breadth5D*10 + breadth20D*5), 0, 100) if None not in (breadth5D, breadth20D) else None
     participationMomentum = clamp(50 - (breadth5D*15 + breadth20D*10), 0, 100) if None not in (breadth5D, breadth20D) else None
 
+    # WEIGHTING CHANGES vs. the original workbook (agreed in chat before this
+    # script was written — see REVISIONS.md for the full rationale):
+    #
+    #   1. Liquidity Flow Stress (8%) now actually counts toward Overall Risk.
+    #      The original SUM() range stopped one row short and silently
+    #      dropped it despite the weight-check table assuming it was included.
+    #
+    #   2. SOFR–IORB Spread and Fed Expectations and 2s10s Curve are no longer
+    #      separately weighted. Each was double-counting information already
+    #      priced into another weighted indicator:
+    #        - SOFR–IORB is 45% of the Repo-Market Stress composite already;
+    #          its 6% standalone weight is folded into Repo-Market Stress
+    #          (6% -> 12%), so total Liquidity weight is unchanged.
+    #        - Fed Expectations = 0.6x(2Y score) + 0.4x(SOFR-IORB score) --
+    #          entirely derived from two indicators already counted elsewhere.
+    #        - 2s10s Curve = 10Y minus 2Y, both already counted separately.
+    #      Their combined 6% (Fed Expectations 3% + 2s10s 3%) moves to Credit,
+    #      which was underweighted (14%) relative to its historical value as
+    #      a leading stress indicator: HY spreads 10%->13%, IG spreads 4%->7%.
+    #      All three stay in the table for visibility (reading + score still
+    #      shown) but are flagged `redundant` and carry 0 weight.
+    #
+    #   Net category weights: Credit 14%->20%, Rates 22%->16%, Liquidity and
+    #   Market/Macro unchanged at 36% (with Liquidity Flow Stress now live)
+    #   and 28% respectively. Total stays 100%.
     indicators = [
         {'name': 'HY Credit Spreads', 'category': 'Credit', 'weight': .13, 'reading': hy, 'units': 'bps', 'score': hyScore},
         {'name': 'Investment-Grade Spreads', 'category': 'Credit', 'weight': .07, 'reading': ig, 'units': 'bps', 'score': igScore},
@@ -314,7 +347,13 @@ def compute_model(S, E):
     }
 
 
+# Asset-class direction by regime, transcribed from the workbook's "Asset
+# Outlook" sheet: columns are [Expansion, Neutral, Inflationary Tightening,
+# Funding/Credit Stress, Deflationary Crisis]. "General Tightening" maps to
+# the same column as Funding/Credit Stress, matching the workbook's own
+# IF() logic (OR($B$3="Funding / Credit Stress", $B$3="General Tightening")).
 ASSET_TABLE = [
+    # name, ticker, expansion, neutral, inflationary_tightening, funding_credit_stress, deflationary_crisis, fx_transmission, interpretation
     ('S&P 500', 'SPY', 'UP', 'MIXED', 'DOWN', 'DOWN', 'DOWN', 'JPY carry unwind', 'Strong yen can pressure leveraged/global risk assets'),
     ('Nasdaq / Growth', 'QQQ', 'UP', 'MIXED', 'DOWN STRONG', 'DOWN', 'DOWN', 'USD funding', 'Broad USD strength can tighten global liquidity'),
     ('Small Caps', 'IWM', 'UP STRONG', 'MIXED', 'DOWN', 'DOWN STRONG', 'DOWN STRONG', 'USD funding', 'Broad USD strength often pressures high-duration growth'),
@@ -373,6 +412,9 @@ def build_asset_outlook(regime):
     }
 
 
+# Stooq symbol for each asset's price history (used for the price-vs-score
+# charts). Stooq's US-listed ETF convention is <ticker>.us; crypto uses a
+# plain <coin>usd pair with no suffix.
 STOOQ_ASSET_MAP = {
     'S&P 500': 'spy.us', 'Nasdaq / Growth': 'qqq.us', 'Small Caps': 'iwm.us',
     'Value Stocks': 'vtv.us', 'High Dividend Stocks': 'vym.us', 'High-Yield Bonds': 'hyg.us',
@@ -385,6 +427,12 @@ STOOQ_ASSET_MAP = {
 
 
 def score_overall_risk_asof(S, E, date):
+    """Recomputes the Overall Risk score as of a historical date, using the
+    same corrected/de-duplicated weights as compute_model() but sourcing
+    every value via asof_at() instead of the live obs(). Returns None if
+    too much required data is missing at that date (e.g. too early in the
+    lookback window). Lean by design — just the number, not the full
+    indicator breakdown, since this runs in a loop over many dates."""
     L = lambda k: asof_at(S.get(k, []), date, 0)
     P1 = lambda k: asof_at(S.get(k, []), date, 1)
     P5 = lambda k: asof_at(S.get(k, []), date, 5)
@@ -483,10 +531,22 @@ def main():
         arr = fetch_fred_series(sid)
         S[sid] = arr
         print(f'  {sid}: {len(arr)} obs' if arr else f'  {sid}: FAILED')
+        time.sleep(0.5)  # small gap between requests — some providers rate-limit
+                          # or briefly block bursts of rapid automated traffic,
+                          # which is a likely cause of the all-requests-timeout
+                          # pattern seen from shared CI runner IPs
 
     fred_success_count = sum(1 for arr in S.values() if arr)
     print(f'FRED fetch summary: {fred_success_count}/{len(FRED_SERIES)} series succeeded')
 
+    # Guard: if the vast majority of requests failed, this is almost
+    # certainly a transient network problem on the runner (seen in
+    # practice: every single request across two unrelated domains timing
+    # out at once), not real data unavailability. Refuse to overwrite the
+    # last known-good model_output.json with an all-null result — better
+    # to leave the dashboard showing slightly-stale-but-real data than
+    # blank it out. The workflow step fails (non-zero exit), so the
+    # "Commit updated output" step never runs and nothing gets pushed.
     MIN_SUCCESS_FRACTION = 0.5
     if fred_success_count < len(FRED_SERIES) * MIN_SUCCESS_FRACTION:
         print(f'ERROR: only {fred_success_count}/{len(FRED_SERIES)} FRED series succeeded '
@@ -499,8 +559,8 @@ def main():
     print('Fetching equity series (Stooq)...')
     E = {}
     for name, ticker in STOOQ_TICKERS.items():
-        arr = fetch_stooq_series(ticker, days_back=220)
-        E[name] = arr
+        arr = fetch_stooq_series(ticker, days_back=220)  # needs enough runway for the
+        E[name] = arr                                     # 180-day risk-history reconstruction below
         print(f'  {name}: {len(arr)} obs' if arr else f'  {name}: FAILED')
 
     print('Computing model...')
@@ -521,6 +581,8 @@ def main():
         score = score_overall_risk_asof(S, E, d)
         if score is not None:
             risk_history.append({'date': d, 'overall_risk': round(score, 2)})
+    # always include the live figure as the most recent point, even if the
+    # sampling loop's last step landed a day or two short of today
     if model['overall_risk'] is not None:
         risk_history.append({'date': today.isoformat(), 'overall_risk': round(model['overall_risk'], 2)})
     print(f'  {len(risk_history)} risk-history points reconstructed')
