@@ -12,11 +12,14 @@ Run on a schedule:  see .github/workflows/refresh.yml
 """
 
 import json
+import os
 import sys
 import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta, timezone
+
+FRED_API_KEY = os.environ.get('FRED_API_KEY', '').strip()
 
 FRED_SERIES = [
     'CPILFESL', 'PCEPILFE', 'PAYEMS', 'CPIAUCSL', 'PCEPI', 'ICSA',
@@ -51,7 +54,42 @@ def http_get(url, timeout=25, retries=2):
 
 
 def fetch_fred_series(series_id, days_back=800):
+    """Fetches via FRED's official JSON API when FRED_API_KEY is set (far
+    more reliable than the public CSV export endpoint, which appears to be
+    getting blocked/throttled for GitHub Actions' shared runner IPs — every
+    request to it timing out, while general internet access on the same
+    runner works fine, is the signature of an endpoint-specific block).
+    Falls back to the old CSV scrape if no key is configured, so this still
+    works if run somewhere without the FRED_API_KEY environment variable
+    set (e.g. testing locally without it)."""
     cosd = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime('%Y-%m-%d')
+
+    if FRED_API_KEY:
+        url = (f'https://api.stlouisfed.org/fred/series/observations'
+               f'?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json'
+               f'&observation_start={cosd}')
+        try:
+            text = http_get(url)
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            print(f'  WARN: {series_id} fetch failed (official API): {e}', file=sys.stderr)
+            return []
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            print(f'  WARN: {series_id} bad response from official API: {e}', file=sys.stderr)
+            return []
+        out = []
+        for obs in data.get('observations', []):
+            v = obs.get('value')
+            if v in (None, '.', ''):
+                continue
+            try:
+                out.append({'date': obs['date'], 'value': float(v)})
+            except (ValueError, KeyError):
+                continue
+        return out
+
+    # fallback: old CSV export endpoint (used only if no API key configured)
     url = f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}&cosd={cosd}'
     try:
         text = http_get(url)
