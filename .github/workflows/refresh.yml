@@ -15,6 +15,8 @@ jobs:
         with:
           python-version: 3.11
       - name: Run refresh script
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python3 refresh_model.py
       - name: Commit updated output
         run: |
