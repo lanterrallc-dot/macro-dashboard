@@ -139,19 +139,6 @@
 
 <div class="shell">
 
-  <div class="disclaimer">
-    <b>Two-tier data source:</b> this page first looks for <code style="color:var(--live)">model_output.json</code> — written by the included <code style="color:var(--live)">refresh_model.py</code> script running server-side on a schedule (see README for a free GitHub Actions setup). Server-side requests aren't subject to browser CORS restrictions, so that path is durable and doesn't depend on any proxy. If that file isn't found (e.g. you're opening this HTML locally without setting it up yet), it falls back to the previous approach: fetching FRED directly in-browser through a public proxy. The status pill top-right tells you which mode is active. The server-side script also adds live S&P 500 Breadth and Market Participation Momentum via Stooq (SPY/RSP) — data the original workbook's broken STOCKHISTORY formulas could never actually pull.
-  </div>
-
-  <div class="bugpanel">
-    <h3>Model integrity notes — found while rebuilding this</h3>
-    <ol>
-      <li><b>Overall Risk silently excludes "Liquidity Flow Stress."</b> The workbook's own <code>Overall Risk</code> formula sums rows 5–24 only, missing row 25. Liquidity Flow Stress carries an 8% weight in the weight-check table but never actually reaches the headline score — in the original file or here, since this page replicates that exact range for fidelity. It's shown in the table below, greyed out, with its own weighted contribution visible so you can see what's being left out.</li>
-      <li><b>The FX Stress calculation has a row-alignment bug.</b> In the "FX Flows" sheet, each currency pair's quote formula (e.g. <code>C8='=Q8'</code> for AUD/USD) points to a fixed row number in a master lookup table — but that table isn't ordered to match, so AUD/USD's formula actually reads PCEPI (inflation) data, and the "Broad USD Index" row reads AUD/USD data instead of DTWEXBGS. <b>This page does not replicate that bug</b> — it fetches each currency pair from its correct FRED series (DEXJPUS, DEXUSEU, DEXCHUS, DEXSZUS, DEXUSAL, DTWEXBGS) directly. That means the FX Stress and Detected Regime values here will differ from what the original file would show if its automation script ran as-is.</li>
-      <li><b>Bank Reserves and Fed Balance Sheet risk-score formulas appear to have a unit mismatch.</b> They're written as if the raw values are in billions (thresholds like <code>3000</code> and <code>7000000</code>), but FRED's WRESBAL/WALCL series return millions — several orders of magnitude larger. This page replicates the formula exactly as written (matching the original's Bank Reserves score of ~0), but it's worth knowing this indicator's score may not mean what it looks like it means.</li>
-    </ol>
-  </div>
-
   <div class="hero">
     <div class="gauge-card">
       <div class="gauge-wrap"><canvas id="gaugeCanvas" width="260" height="150"></canvas>
@@ -395,9 +382,6 @@ function computeModel(S){
   const fxLegs=[jpyScore,eurScore,cnyScore,chfScore,audScore,dxyFxScore];
   const fxStress = fxLegs.some(v=>v===null) ? null : 0.3*jpyScore+0.15*eurScore+0.2*cnyScore+0.1*chfScore+0.1*audScore+0.15*dxyFxScore;
 
-  // Weighting matches refresh_model.py exactly — see that file's comments for
-  // the full rationale (redundancy removal, Credit reweight, unit fix, and
-  // the Liquidity Flow Stress inclusion fix).
   const indicators=[
     {name:'HY Credit Spreads', category:'Credit', weight:.13, reading:hy, units:'bps', score:hyScore, ids:['BAMLH0A0HYM2']},
     {name:'Investment-Grade Spreads', category:'Credit', weight:.07, reading:ig, units:'bps', score:igScore, ids:['BAMLC0A0CM']},
