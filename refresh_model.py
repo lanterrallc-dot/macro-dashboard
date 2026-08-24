@@ -1,31 +1,23 @@
-name: Refresh macro liquidity model
+#!/usr/bin/env python3
+"""
+Macro / Liquidity Risk Model — server-side refresh.
 
-on:
-  schedule:
-    - cron: '*/15 * * * *'
-  workflow_dispatch: {}
+Fetches every input series directly from FRED and Stooq (no CORS
+restriction applies to server-side requests) and recomputes the full
+model using the same formulas extracted from the source workbook.
+Writes model_output.json, which the dashboard reads.
 
-permissions:
-  contents: write
+Run manually:      python3 refresh_model.py
+Run on a schedule:  see .github/workflows/refresh.yml
+"""
 
-jobs:
-  refresh:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+import json
+import sys
+import urllib.request
+import urllib.error
+from datetime import datetime, timedelta, timezone
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Run refresh script
-        run: python3 refresh_model.py
-
-      - name: Commit updated output
-        run: |
-          git config user.name "macro-model-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add model_output.json
-          git diff --quiet --cached || git commit -m "Refresh model output [skip ci]"
-          git pull --rebase origin main
-          git push
+FRED_SERIES = [
+    'CPILFESL', 'PCEPILFE', 'PAYEMS', 'CPIAUCSL', 'PCEPI', 'ICSA',
+    'BAMLH0A0HYM2', 'BAMLC0A0CM', 'SOFR', 'IORB', 'VIXCLS', 'DGS2',
+    'DGS10', 'T10Y2Y', 'DTWEXBGS', 'WALCL',
