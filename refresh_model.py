@@ -85,6 +85,19 @@ def obs(arr, back):
     return arr[idx]['value'] if idx >= 0 else None
 
 
+def asof_at(series, cutoff_date, back=0):
+    """Like obs(), but relative to a specific date cutoff rather than the
+    end of the series — used to reconstruct historical scores. `series`
+    must be sorted ascending by date (fetch_fred_series/fetch_stooq_series
+    already return it that way)."""
+    if not series:
+        return None
+    # series is sorted ascending; find valid entries up to cutoff
+    valid = [p['value'] for p in series if p['date'] <= cutoff_date]
+    idx = len(valid) - 1 - back
+    return valid[idx] if idx >= 0 else None
+
+
 def clamp(x, lo, hi):
     if x is None:
         return None
@@ -385,6 +398,118 @@ def build_asset_outlook(regime):
     }
 
 
+# Stooq symbol for each asset's price history (used for the price-vs-score
+# charts). Stooq's US-listed ETF convention is <ticker>.us; crypto uses a
+# plain <coin>usd pair with no suffix.
+STOOQ_ASSET_MAP = {
+    'S&P 500': 'spy.us', 'Nasdaq / Growth': 'qqq.us', 'Small Caps': 'iwm.us',
+    'Value Stocks': 'vtv.us', 'High Dividend Stocks': 'vym.us', 'High-Yield Bonds': 'hyg.us',
+    'Investment-Grade Bonds': 'lqd.us', 'Short Treasuries / T-Bills': 'bil.us',
+    'Long Treasuries': 'tlt.us', 'U.S. Dollar': 'uup.us', 'Gold': 'gld.us', 'Silver': 'slv.us',
+    'Broad Commodities': 'dbc.us', 'Oil': 'uso.us', 'REITs': 'vnq.us', 'Utilities': 'xlu.us',
+    'Consumer Staples': 'xlp.us', 'Financials': 'xlf.us', 'Bitcoin': 'btcusd',
+    'Crypto ex-BTC': 'ethusd', 'Emerging-Market Stocks': 'eem.us', 'Emerging-Market Bonds': 'emb.us',
+}
+
+
+def score_overall_risk_asof(S, E, date):
+    """Recomputes the Overall Risk score as of a historical date, using the
+    same corrected/de-duplicated weights as compute_model() but sourcing
+    every value via asof_at() instead of the live obs(). Returns None if
+    too much required data is missing at that date (e.g. too early in the
+    lookback window). Lean by design — just the number, not the full
+    indicator breakdown, since this runs in a loop over many dates."""
+    L = lambda k: asof_at(S.get(k, []), date, 0)
+    P1 = lambda k: asof_at(S.get(k, []), date, 1)
+    P5 = lambda k: asof_at(S.get(k, []), date, 5)
+    P20 = lambda k: asof_at(S.get(k, []), date, 20)
+    EL = lambda k: asof_at(E.get(k, []), date, 0)
+    EP5 = lambda k: asof_at(E.get(k, []), date, 5)
+    EP20 = lambda k: asof_at(E.get(k, []), date, 20)
+
+    hy, ig = L('BAMLH0A0HYM2'), L('BAMLC0A0CM')
+    hyScore, igScore = hy_score(hy), (clamp((ig - 60) / 2.4, 0, 100) if ig is not None else None)
+
+    sofr, iorb, effr, s25, s75 = L('SOFR'), L('IORB'), L('EFFR'), L('SOFR25'), L('SOFR75')
+    sofrIorbBps = (sofr - iorb) * 100 if None not in (sofr, iorb) else None
+    sofrEffrBps = (sofr - effr) * 100 if None not in (sofr, effr) else None
+    sofrIqrBps = (s75 - s25) * 100 if None not in (s75, s25) else None
+    repoScore = None
+    if None not in (sofrIorbBps, sofrEffrBps, sofrIqrBps):
+        repoScore = clamp(0.45*clamp(20+sofrIorbBps*3,0,100)+0.3*clamp(20+sofrEffrBps*4,0,100)+0.25*clamp(sofrIqrBps*4,0,100), 0, 100)
+
+    dgs2, dgs10 = L('DGS2'), L('DGS10')
+    dgs2p5, dgs10p5 = P5('DGS2'), P5('DGS10')
+    move2 = abs((dgs2 - dgs2p5) * 100) if None not in (dgs2, dgs2p5) else None
+    move10 = abs((dgs10 - dgs10p5) * 100) if None not in (dgs10, dgs10p5) else None
+    treasuryVolStress = clamp((move2*0.6 + move10*0.4)*2, 0, 100) if None not in (move2, move10) else None
+
+    vix, vixp5 = L('VIXCLS'), P5('VIXCLS')
+    vixScore = clamp((vix - 12) * 3.2, 0, 100) if vix is not None else None
+    vixChgPct = (vix/vixp5 - 1)*100 if None not in (vix, vixp5) and vixp5 else None
+    vixTermProxy = clamp(50 + vixChgPct*4, 0, 100) if vixChgPct is not None else None
+
+    y2Score = clamp((dgs2 - 3.5) * 25, 0, 100) if dgs2 is not None else None
+    y10Score = clamp((dgs10 - 4) * 20, 0, 100) if dgs10 is not None else None
+
+    dxy = L('DTWEXBGS')
+    dxyScore = clamp((dxy - 100) * 2, 0, 100) if dxy is not None else None
+
+    walcl, wresbal, wtregen = L('WALCL'), L('WRESBAL'), L('WTREGEN')
+    fedBsScore = clamp(50 - (walcl - 7000000) / 40000, 0, 100) if walcl is not None else None
+    reservesScore = clamp(50 - (wresbal/1000 - 3000) / 20, 0, 100) if wresbal is not None else None
+    tgaScore = clamp(20 + (wtregen/1000 - 500) / 10, 0, 100) if wtregen is not None else None
+
+    nfci = L('NFCI')
+    nfciScore = clamp(50 + nfci * 35, 0, 100) if nfci is not None else None
+
+    icsa, icsaP5 = L('ICSA'), P5('ICSA')
+    econSurpriseScore = None
+    if None not in (icsa, icsaP5) and icsaP5:
+        econSurpriseScore = clamp(50 + (icsa/icsaP5 - 1)*100*5, 0, 100)
+
+    cpiCore, cpiCoreP1 = L('CPILFESL'), P1('CPILFESL')
+    pceCore, pceCoreP1 = L('PCEPILFE'), P1('PCEPILFE')
+    inflationLaborScore = None
+    if None not in (cpiCore, cpiCoreP1, pceCore, pceCoreP1) and cpiCoreP1 and pceCoreP1:
+        coreCpiMo = (cpiCore/cpiCoreP1 - 1) * 100
+        corePceMo = (pceCore/pceCoreP1 - 1) * 100
+        inflationLaborScore = clamp(50 + ((coreCpiMo*0.5 + corePceMo*0.5) - 0.2)*200, 0, 100)
+
+    walclP5, walclP20 = P5('WALCL'), P20('WALCL')
+    wresbalP5, wresbalP20 = P5('WRESBAL'), P20('WRESBAL')
+    wtregenP5, wtregenP20 = P5('WTREGEN'), P20('WTREGEN')
+    liqFlowComposite = None
+    if None not in (walcl, walclP5, walclP20, wresbal, wresbalP5, wresbalP20, wtregen, wtregenP5, wtregenP20):
+        netImp5 = (walcl-walclP5) + (wresbal-wresbalP5) - (wtregen-wtregenP5)
+        netImp20 = (walcl-walclP20) + (wresbal-wresbalP20) - (wtregen-wtregenP20)
+        liqFlow5 = clamp(50 - netImp5/10000, 0, 100)
+        liqFlow20 = clamp(50 - netImp20/20000, 0, 100)
+        liqFlowComposite = liqFlow5*0.65 + liqFlow20*0.35
+
+    spyL, spyP5, spyP20 = EL('SPY'), EP5('SPY'), EP20('SPY')
+    rspL, rspP5, rspP20 = EL('RSP'), EP5('RSP'), EP20('RSP')
+    breadth5D = breadth20D = None
+    if None not in (spyL, spyP5, rspL, rspP5) and spyP5 and rspP5:
+        breadth5D = ((rspL/rspP5)/(spyL/spyP5)-1)*100
+    if None not in (spyL, spyP20, rspL, rspP20) and spyP20 and rspP20:
+        breadth20D = ((rspL/rspP20)/(spyL/spyP20)-1)*100
+    breadthStress = clamp(50-(breadth5D*10+breadth20D*5),0,100) if None not in (breadth5D,breadth20D) else None
+    participationMomentum = clamp(50-(breadth5D*15+breadth20D*10),0,100) if None not in (breadth5D,breadth20D) else None
+
+    weighted_scores = [
+        (hyScore, .13), (igScore, .07), (repoScore, .12), (treasuryVolStress, .07),
+        (vixScore, .05), (vixTermProxy, .05), (y2Score, .05), (y10Score, .04),
+        (dxyScore, .05), (fedBsScore, .03), (reservesScore, .04), (tgaScore, .04),
+        (nfciScore, .04), (breadthStress, .05), (participationMomentum, .03),
+        (econSurpriseScore, .03), (inflationLaborScore, .03), (liqFlowComposite, .08),
+    ]
+    contributing = [(s, w) for s, w in weighted_scores if s is not None]
+    if not contributing:
+        return None
+    return sum(s*w for s, w in contributing)
+
+
 def main():
     print('Fetching FRED series...')
     S = {}
@@ -396,12 +521,40 @@ def main():
     print('Fetching equity series (Stooq)...')
     E = {}
     for name, ticker in STOOQ_TICKERS.items():
-        arr = fetch_stooq_series(ticker)
-        E[name] = arr
+        arr = fetch_stooq_series(ticker, days_back=220)  # needs enough runway for the
+        E[name] = arr                                     # 180-day risk-history reconstruction below
         print(f'  {name}: {len(arr)} obs' if arr else f'  {name}: FAILED')
 
     print('Computing model...')
     model = compute_model(S, E)
+
+    print('Fetching per-asset price history (Stooq, ~180 days) for the price-vs-score charts...')
+    asset_price_history = {}
+    for name, symbol in STOOQ_ASSET_MAP.items():
+        arr = fetch_stooq_series(symbol, days_back=180)
+        asset_price_history[name] = arr
+        print(f'  {name} ({symbol}): {len(arr)} obs' if arr else f'  {name} ({symbol}): FAILED')
+
+    print('Reconstructing Overall Risk history (~180 days, sampled every 3 days)...')
+    today = datetime.now(timezone.utc).date()
+    risk_history = []
+    for i in range(180, -1, -3):
+        d = (today - timedelta(days=i)).isoformat()
+        score = score_overall_risk_asof(S, E, d)
+        if score is not None:
+            risk_history.append({'date': d, 'overall_risk': round(score, 2)})
+    # always include the live figure as the most recent point, even if the
+    # sampling loop's last step landed a day or two short of today
+    if model['overall_risk'] is not None:
+        risk_history.append({'date': today.isoformat(), 'overall_risk': round(model['overall_risk'], 2)})
+    print(f'  {len(risk_history)} risk-history points reconstructed')
+
+    model['asset_price_history'] = asset_price_history
+    model['risk_history'] = risk_history
+    model['price_history_note'] = ('Daily closing prices (Stooq) and a daily-resolution reconstruction of '
+                                    'the Overall Risk score, both refreshed on this 15-minute schedule. '
+                                    '"Real-time" here means "as of the latest 15-minute refresh, using the '
+                                    'latest available daily close" — not intraday tick data.')
 
     with open('model_output.json', 'w') as f:
         json.dump(model, f, indent=2)
