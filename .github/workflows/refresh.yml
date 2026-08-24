@@ -22,9 +22,11 @@ jobs:
         run: python3 refresh_model.py
 
       - name: Commit updated output
+     - name: Commit updated output
         run: |
           git config user.name "macro-model-bot"
           git config user.email "actions@users.noreply.github.com"
           git add model_output.json
           git diff --quiet --cached || git commit -m "Refresh model output [skip ci]"
+          git pull --rebase origin main
           git push
