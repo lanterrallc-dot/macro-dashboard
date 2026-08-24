@@ -1,0 +1,675 @@
+{
+  "generated_at": "2026-08-24T23:53:53.751499+00:00",
+  "indicators": [
+    {
+      "name": "HY Credit Spreads",
+      "category": "Credit",
+      "weight": 0.13,
+      "reading": 2.7,
+      "units": "bps",
+      "score": 10,
+      "weighted": 1.3
+    },
+    {
+      "name": "Investment-Grade Spreads",
+      "category": "Credit",
+      "weight": 0.07,
+      "reading": 0.81,
+      "units": "bps",
+      "score": 0,
+      "weighted": 0.0
+    },
+    {
+      "name": "SOFR\u2013IORB Spread",
+      "category": "Liquidity",
+      "weight": 0,
+      "reading": 0.0,
+      "units": "bps",
+      "score": 50.0,
+      "redundant": "folded into Repo-Market Stress (45% of that composite) \u2014 weight moved there to avoid double-counting",
+      "weighted": 0.0
+    },
+    {
+      "name": "Repo-Market Stress",
+      "category": "Liquidity",
+      "weight": 0.12,
+      "reading": 24.40000000000003,
+      "units": "0\u2013100",
+      "score": 24.40000000000003,
+      "weighted": 2.9280000000000035
+    },
+    {
+      "name": "Treasury Vol Proxy (MOVE-style)",
+      "category": "Rates",
+      "weight": 0.07,
+      "reading": 13.200000000000074,
+      "units": "0\u2013100",
+      "score": 13.200000000000074,
+      "source_note": "synthetic proxy from 2Y/10Y 5-day moves \u2014 the real MOVE index isn\u2019t freely available via FRED",
+      "weighted": 0.9240000000000053
+    },
+    {
+      "name": "VIX",
+      "category": "Market / Macro",
+      "weight": 0.05,
+      "reading": 15.13,
+      "units": "index",
+      "score": 10.016000000000004,
+      "weighted": 0.5008000000000002
+    },
+    {
+      "name": "VIX Momentum Proxy (5D)",
+      "category": "Market / Macro",
+      "weight": 0.05,
+      "reading": 74.70175438596493,
+      "units": "0\u2013100",
+      "score": 74.70175438596493,
+      "source_note": "transform of VIX\u2019s own 5-day change \u2014 not real futures term-structure data",
+      "weighted": 3.735087719298247
+    },
+    {
+      "name": "2Y Treasury Yield",
+      "category": "Rates",
+      "weight": 0.05,
+      "reading": 4.24,
+      "units": "%",
+      "score": 18.500000000000007,
+      "weighted": 0.9250000000000004
+    },
+    {
+      "name": "10Y Treasury Yield",
+      "category": "Rates",
+      "weight": 0.04,
+      "reading": 4.74,
+      "units": "%",
+      "score": 14.800000000000004,
+      "weighted": 0.5920000000000002
+    },
+    {
+      "name": "2s10s Curve",
+      "category": "Rates",
+      "weight": 0,
+      "reading": 0.46,
+      "units": "pct pts",
+      "score": 40.8,
+      "redundant": "derived from 2Y and 10Y, both already counted separately \u2014 weight moved to Credit",
+      "weighted": 0.0
+    },
+    {
+      "name": "DXY / Broad Dollar",
+      "category": "Liquidity",
+      "weight": 0.05,
+      "reading": 118.0628,
+      "units": "index",
+      "score": 36.12559999999999,
+      "weighted": 1.8062799999999997
+    },
+    {
+      "name": "Fed Balance Sheet",
+      "category": "Liquidity",
+      "weight": 0.03,
+      "reading": 6745699.0,
+      "units": "$mm",
+      "score": 56.357525,
+      "weighted": 1.69072575
+    },
+    {
+      "name": "Bank Reserves",
+      "category": "Liquidity",
+      "weight": 0.04,
+      "reading": 2935287.0,
+      "units": "$mm",
+      "score": 53.23565000000001,
+      "flag": "unit-corrected (\u00f71000 to billions) vs. original workbook \u2014 see notes",
+      "weighted": 2.1294260000000005
+    },
+    {
+      "name": "Treasury General Account",
+      "category": "Liquidity",
+      "weight": 0.04,
+      "reading": 953612.0,
+      "units": "$mm",
+      "score": 65.3612,
+      "flag": "unit-corrected (\u00f71000 to billions) vs. original workbook \u2014 see notes",
+      "weighted": 2.614448
+    },
+    {
+      "name": "Financial Conditions (NFCI)",
+      "category": "Market / Macro",
+      "weight": 0.04,
+      "reading": -0.559,
+      "units": "index",
+      "score": 30.435,
+      "weighted": 1.2174
+    },
+    {
+      "name": "S&P 500 Breadth",
+      "category": "Market / Macro",
+      "weight": 0.05,
+      "reading": null,
+      "units": "0\u2013100",
+      "score": null,
+      "source_note": "now live via Stooq SPY/RSP \u2014 unavailable in the original workbook",
+      "weighted": null
+    },
+    {
+      "name": "Market Participation Momentum",
+      "category": "Market / Macro",
+      "weight": 0.03,
+      "reading": null,
+      "units": "0\u2013100",
+      "score": null,
+      "source_note": "now live via Stooq SPY/RSP \u2014 unavailable in the original workbook",
+      "weighted": null
+    },
+    {
+      "name": "Economic Surprise",
+      "category": "Market / Macro",
+      "weight": 0.03,
+      "reading": 42.82296650717705,
+      "units": "0\u2013100",
+      "score": 42.82296650717705,
+      "weighted": 1.2846889952153115
+    },
+    {
+      "name": "Inflation & Labor Momentum",
+      "category": "Market / Macro",
+      "weight": 0.03,
+      "reading": 44.76466069509243,
+      "units": "0\u2013100",
+      "score": 44.76466069509243,
+      "weighted": 1.342939820852773
+    },
+    {
+      "name": "Fed Expectations",
+      "category": "Rates",
+      "weight": 0,
+      "reading": 31.1,
+      "units": "0\u2013100",
+      "score": 31.1,
+      "redundant": "derived entirely from the 2Y Yield and SOFR-IORB scores, both already counted separately \u2014 weight moved to Credit",
+      "weighted": 0.0
+    },
+    {
+      "name": "Liquidity Flow Stress",
+      "category": "Liquidity",
+      "weight": 0.08,
+      "reading": 78.362005,
+      "units": "0\u2013100",
+      "score": 78.362005,
+      "weighted": 6.2689604
+    }
+  ],
+  "overall_risk": 29.259756685366344,
+  "effective_weight": 0.9200000000000003,
+  "category_scores": {
+    "Liquidity": 48.43844486111112,
+    "Credit": 6.5,
+    "Rates": 15.256250000000035,
+    "Market / Macro": 40.40458267683166
+  },
+  "inflationary_pressure": 25.226712500000012,
+  "fx_stress": 49.33502412440073,
+  "regime": "Neutral / Balanced",
+  "asset_outlook": {
+    "regime": "Neutral / Balanced",
+    "assets": [
+      {
+        "name": "S&P 500",
+        "ticker": "SPY",
+        "likely_direction": "MIXED",
+        "fx_transmission": "JPY carry unwind",
+        "interpretation": "Strong yen can pressure leveraged/global risk assets",
+        "direction_rank": 0
+      },
+      {
+        "name": "Nasdaq / Growth",
+        "ticker": "QQQ",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD funding",
+        "interpretation": "Broad USD strength can tighten global liquidity",
+        "direction_rank": 0
+      },
+      {
+        "name": "Small Caps",
+        "ticker": "IWM",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD funding",
+        "interpretation": "Broad USD strength often pressures high-duration growth",
+        "direction_rank": 0
+      },
+      {
+        "name": "Value Stocks",
+        "ticker": "VTV",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD / growth",
+        "interpretation": "Strong USD can pressure smaller domestic/leveraged firms less directly than EM",
+        "direction_rank": 0
+      },
+      {
+        "name": "High Dividend Stocks",
+        "ticker": "VYM",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD",
+        "interpretation": "Strong USD can weigh on multinational earnings",
+        "direction_rank": 0
+      },
+      {
+        "name": "High-Yield Bonds",
+        "ticker": "HYG",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD funding",
+        "interpretation": "Dollar stress can widen HY spreads",
+        "direction_rank": 0
+      },
+      {
+        "name": "Investment-Grade Bonds",
+        "ticker": "LQD",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD / rates",
+        "interpretation": "Depends on whether FX stress is inflationary or deflationary",
+        "direction_rank": 0
+      },
+      {
+        "name": "Short Treasuries / T-Bills",
+        "ticker": "BIL / SGOV",
+        "likely_direction": "UP",
+        "fx_transmission": "Safe collateral",
+        "interpretation": "Often resilient in FX/liquidity stress",
+        "direction_rank": 1
+      },
+      {
+        "name": "Long Treasuries",
+        "ticker": "TLT",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Safe haven",
+        "interpretation": "Can benefit in deflationary stress; hurt in inflationary tightening",
+        "direction_rank": 0
+      },
+      {
+        "name": "U.S. Dollar",
+        "ticker": "DXY / UUP",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Direct",
+        "interpretation": "This is itself the USD signal",
+        "direction_rank": 0
+      },
+      {
+        "name": "Gold",
+        "ticker": "GLD",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Safe haven",
+        "interpretation": "Gold often benefits after acute liquidation passes",
+        "direction_rank": 0
+      },
+      {
+        "name": "Silver",
+        "ticker": "SLV",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Growth / USD",
+        "interpretation": "Sensitive to USD and industrial-growth expectations",
+        "direction_rank": 0
+      },
+      {
+        "name": "Broad Commodities",
+        "ticker": "DBC",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD inverse",
+        "interpretation": "Broad commodities often face headwind from stronger USD",
+        "direction_rank": 0
+      },
+      {
+        "name": "Oil",
+        "ticker": "USO / CL",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD / growth",
+        "interpretation": "Strong USD and growth fear often weigh on oil",
+        "direction_rank": 0
+      },
+      {
+        "name": "REITs",
+        "ticker": "VNQ",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Rates / USD",
+        "interpretation": "Sensitive to yields and global funding",
+        "direction_rank": 0
+      },
+      {
+        "name": "Utilities",
+        "ticker": "XLU",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Defensive",
+        "interpretation": "Often relative outperformer in risk-off regimes",
+        "direction_rank": 0
+      },
+      {
+        "name": "Consumer Staples",
+        "ticker": "XLP",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Defensive",
+        "interpretation": "Often relative outperformer",
+        "direction_rank": 0
+      },
+      {
+        "name": "Financials",
+        "ticker": "XLF",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Funding",
+        "interpretation": "Credit/funding stress is negative",
+        "direction_rank": 0
+      },
+      {
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Carry / liquidity",
+        "interpretation": "Very sensitive to carry unwind and USD liquidity",
+        "direction_rank": 0
+      },
+      {
+        "name": "Crypto ex-BTC",
+        "ticker": "ETH / Altcoins",
+        "likely_direction": "MIXED",
+        "fx_transmission": "Carry / liquidity",
+        "interpretation": "Usually even more sensitive than BTC",
+        "direction_rank": 0
+      },
+      {
+        "name": "Emerging-Market Stocks",
+        "ticker": "EEM",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD / China",
+        "interpretation": "Strong USD/CNY weakness often negative",
+        "direction_rank": 0
+      },
+      {
+        "name": "Emerging-Market Bonds",
+        "ticker": "EMB",
+        "likely_direction": "MIXED",
+        "fx_transmission": "USD funding",
+        "interpretation": "Dollar tightening can pressure EM debt",
+        "direction_rank": 0
+      }
+    ],
+    "most_favored": [
+      "Short Treasuries / T-Bills"
+    ],
+    "least_favored": [],
+    "note": "Regime-conditioned historical tendencies from the source workbook, not guaranteed forecasts. \"Relative UP\" means the asset may still decline but has often held up better than broad equities."
+  },
+  "asset_price_history": {
+    "S&P 500": [],
+    "Nasdaq / Growth": [],
+    "Small Caps": [],
+    "Value Stocks": [],
+    "High Dividend Stocks": [],
+    "High-Yield Bonds": [],
+    "Investment-Grade Bonds": [],
+    "Short Treasuries / T-Bills": [],
+    "Long Treasuries": [],
+    "U.S. Dollar": [],
+    "Gold": [],
+    "Silver": [],
+    "Broad Commodities": [],
+    "Oil": [],
+    "REITs": [],
+    "Utilities": [],
+    "Consumer Staples": [],
+    "Financials": [],
+    "Bitcoin": [],
+    "Crypto ex-BTC": [],
+    "Emerging-Market Stocks": [],
+    "Emerging-Market Bonds": []
+  },
+  "risk_history": [
+    {
+      "date": "2026-02-25",
+      "overall_risk": 23.93
+    },
+    {
+      "date": "2026-02-28",
+      "overall_risk": 28.4
+    },
+    {
+      "date": "2026-03-03",
+      "overall_risk": 30.49
+    },
+    {
+      "date": "2026-03-06",
+      "overall_risk": 30.18
+    },
+    {
+      "date": "2026-03-09",
+      "overall_risk": 26.7
+    },
+    {
+      "date": "2026-03-12",
+      "overall_risk": 28.39
+    },
+    {
+      "date": "2026-03-15",
+      "overall_risk": 23.77
+    },
+    {
+      "date": "2026-03-18",
+      "overall_risk": 24.17
+    },
+    {
+      "date": "2026-03-21",
+      "overall_risk": 25.91
+    },
+    {
+      "date": "2026-03-24",
+      "overall_risk": 30.21
+    },
+    {
+      "date": "2026-03-27",
+      "overall_risk": 28.58
+    },
+    {
+      "date": "2026-03-30",
+      "overall_risk": 27.47
+    },
+    {
+      "date": "2026-04-02",
+      "overall_risk": 24.33
+    },
+    {
+      "date": "2026-04-05",
+      "overall_risk": 24.08
+    },
+    {
+      "date": "2026-04-08",
+      "overall_risk": 19.22
+    },
+    {
+      "date": "2026-04-11",
+      "overall_risk": 19.12
+    },
+    {
+      "date": "2026-04-14",
+      "overall_risk": 20.45
+    },
+    {
+      "date": "2026-04-17",
+      "overall_risk": 21.19
+    },
+    {
+      "date": "2026-04-20",
+      "overall_risk": 23.08
+    },
+    {
+      "date": "2026-04-23",
+      "overall_risk": 29.77
+    },
+    {
+      "date": "2026-04-26",
+      "overall_risk": 27.99
+    },
+    {
+      "date": "2026-04-29",
+      "overall_risk": 26.39
+    },
+    {
+      "date": "2026-05-02",
+      "overall_risk": 24.76
+    },
+    {
+      "date": "2026-05-05",
+      "overall_risk": 25.52
+    },
+    {
+      "date": "2026-05-08",
+      "overall_risk": 23.17
+    },
+    {
+      "date": "2026-05-11",
+      "overall_risk": 23.02
+    },
+    {
+      "date": "2026-05-14",
+      "overall_risk": 23.46
+    },
+    {
+      "date": "2026-05-17",
+      "overall_risk": 27.59
+    },
+    {
+      "date": "2026-05-20",
+      "overall_risk": 22.52
+    },
+    {
+      "date": "2026-05-23",
+      "overall_risk": 20.87
+    },
+    {
+      "date": "2026-05-26",
+      "overall_risk": 23.67
+    },
+    {
+      "date": "2026-05-29",
+      "overall_risk": 21.84
+    },
+    {
+      "date": "2026-06-01",
+      "overall_risk": 23.8
+    },
+    {
+      "date": "2026-06-04",
+      "overall_risk": 23.62
+    },
+    {
+      "date": "2026-06-07",
+      "overall_risk": 29.55
+    },
+    {
+      "date": "2026-06-10",
+      "overall_risk": 26.72
+    },
+    {
+      "date": "2026-06-13",
+      "overall_risk": 22.55
+    },
+    {
+      "date": "2026-06-16",
+      "overall_risk": 21.76
+    },
+    {
+      "date": "2026-06-19",
+      "overall_risk": 24.59
+    },
+    {
+      "date": "2026-06-22",
+      "overall_risk": 26.52
+    },
+    {
+      "date": "2026-06-25",
+      "overall_risk": 30.07
+    },
+    {
+      "date": "2026-06-28",
+      "overall_risk": 28.71
+    },
+    {
+      "date": "2026-07-01",
+      "overall_risk": 24.94
+    },
+    {
+      "date": "2026-07-04",
+      "overall_risk": 22.95
+    },
+    {
+      "date": "2026-07-07",
+      "overall_risk": 25.29
+    },
+    {
+      "date": "2026-07-10",
+      "overall_risk": 19.92
+    },
+    {
+      "date": "2026-07-13",
+      "overall_risk": 24.07
+    },
+    {
+      "date": "2026-07-16",
+      "overall_risk": 21.86
+    },
+    {
+      "date": "2026-07-19",
+      "overall_risk": 22.67
+    },
+    {
+      "date": "2026-07-22",
+      "overall_risk": 25.15
+    },
+    {
+      "date": "2026-07-25",
+      "overall_risk": 24.79
+    },
+    {
+      "date": "2026-07-28",
+      "overall_risk": 24.5
+    },
+    {
+      "date": "2026-07-31",
+      "overall_risk": 22.41
+    },
+    {
+      "date": "2026-08-03",
+      "overall_risk": 21.99
+    },
+    {
+      "date": "2026-08-06",
+      "overall_risk": 21.52
+    },
+    {
+      "date": "2026-08-09",
+      "overall_risk": 23.35
+    },
+    {
+      "date": "2026-08-12",
+      "overall_risk": 24.29
+    },
+    {
+      "date": "2026-08-15",
+      "overall_risk": 25.04
+    },
+    {
+      "date": "2026-08-18",
+      "overall_risk": 27.72
+    },
+    {
+      "date": "2026-08-21",
+      "overall_risk": 29.26
+    },
+    {
+      "date": "2026-08-24",
+      "overall_risk": 29.26
+    },
+    {
+      "date": "2026-08-24",
+      "overall_risk": 29.26
+    }
+  ],
+  "price_history_note": "Daily closing prices (Stooq) and a daily-resolution reconstruction of the Overall Risk score, both refreshed on this 15-minute schedule. \"Real-time\" here means \"as of the latest 15-minute refresh, using the latest available daily close\" \u2014 not intraday tick data."
+}
