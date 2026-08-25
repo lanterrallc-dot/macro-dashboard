@@ -1,0 +1,819 @@
+{
+  "generated_at": "2026-08-25T21:29:29.617613+00:00",
+  "train_period": {
+    "start": "2018-01-31",
+    "end": "2022-12-31",
+    "n_dates": 60
+  },
+  "test_period": {
+    "start": "2023-01-31",
+    "end": "2026-04-30",
+    "n_dates": 40
+  },
+  "empirical_table": {
+    "Liquidity Expansion": {
+      "S&P 500": "INSUFFICIENT DATA",
+      "Nasdaq / Growth": "INSUFFICIENT DATA",
+      "Small Caps": "INSUFFICIENT DATA",
+      "Value Stocks": "INSUFFICIENT DATA",
+      "High Dividend Stocks": "INSUFFICIENT DATA",
+      "High-Yield Bonds": "INSUFFICIENT DATA",
+      "Investment-Grade Bonds": "INSUFFICIENT DATA",
+      "Short Treasuries / T-Bills": "INSUFFICIENT DATA",
+      "Long Treasuries": "INSUFFICIENT DATA",
+      "U.S. Dollar": "INSUFFICIENT DATA",
+      "Gold": "INSUFFICIENT DATA",
+      "Silver": "INSUFFICIENT DATA",
+      "Broad Commodities": "INSUFFICIENT DATA",
+      "Oil": "INSUFFICIENT DATA",
+      "REITs": "INSUFFICIENT DATA",
+      "Utilities": "INSUFFICIENT DATA",
+      "Consumer Staples": "INSUFFICIENT DATA",
+      "Financials": "INSUFFICIENT DATA",
+      "Bitcoin": "INSUFFICIENT DATA",
+      "Crypto ex-BTC": "INSUFFICIENT DATA",
+      "Emerging-Market Stocks": "INSUFFICIENT DATA",
+      "Emerging-Market Bonds": "INSUFFICIENT DATA"
+    },
+    "Neutral / Balanced": {
+      "S&P 500": "INSUFFICIENT DATA",
+      "Nasdaq / Growth": "INSUFFICIENT DATA",
+      "Small Caps": "INSUFFICIENT DATA",
+      "Value Stocks": "INSUFFICIENT DATA",
+      "High Dividend Stocks": "INSUFFICIENT DATA",
+      "High-Yield Bonds": "INSUFFICIENT DATA",
+      "Investment-Grade Bonds": "INSUFFICIENT DATA",
+      "Short Treasuries / T-Bills": "INSUFFICIENT DATA",
+      "Long Treasuries": "INSUFFICIENT DATA",
+      "U.S. Dollar": "INSUFFICIENT DATA",
+      "Gold": "INSUFFICIENT DATA",
+      "Silver": "INSUFFICIENT DATA",
+      "Broad Commodities": "INSUFFICIENT DATA",
+      "Oil": "INSUFFICIENT DATA",
+      "REITs": "INSUFFICIENT DATA",
+      "Utilities": "INSUFFICIENT DATA",
+      "Consumer Staples": "INSUFFICIENT DATA",
+      "Financials": "INSUFFICIENT DATA",
+      "Bitcoin": "INSUFFICIENT DATA",
+      "Crypto ex-BTC": "INSUFFICIENT DATA",
+      "Emerging-Market Stocks": "INSUFFICIENT DATA",
+      "Emerging-Market Bonds": "INSUFFICIENT DATA"
+    },
+    "Inflationary Tightening": {
+      "S&P 500": "INSUFFICIENT DATA",
+      "Nasdaq / Growth": "INSUFFICIENT DATA",
+      "Small Caps": "INSUFFICIENT DATA",
+      "Value Stocks": "INSUFFICIENT DATA",
+      "High Dividend Stocks": "INSUFFICIENT DATA",
+      "High-Yield Bonds": "INSUFFICIENT DATA",
+      "Investment-Grade Bonds": "INSUFFICIENT DATA",
+      "Short Treasuries / T-Bills": "INSUFFICIENT DATA",
+      "Long Treasuries": "INSUFFICIENT DATA",
+      "U.S. Dollar": "INSUFFICIENT DATA",
+      "Gold": "INSUFFICIENT DATA",
+      "Silver": "INSUFFICIENT DATA",
+      "Broad Commodities": "INSUFFICIENT DATA",
+      "Oil": "INSUFFICIENT DATA",
+      "REITs": "INSUFFICIENT DATA",
+      "Utilities": "INSUFFICIENT DATA",
+      "Consumer Staples": "INSUFFICIENT DATA",
+      "Financials": "INSUFFICIENT DATA",
+      "Bitcoin": "INSUFFICIENT DATA",
+      "Crypto ex-BTC": "INSUFFICIENT DATA",
+      "Emerging-Market Stocks": "INSUFFICIENT DATA",
+      "Emerging-Market Bonds": "INSUFFICIENT DATA"
+    },
+    "Funding / Credit Stress": {
+      "S&P 500": "INSUFFICIENT DATA",
+      "Nasdaq / Growth": "INSUFFICIENT DATA",
+      "Small Caps": "INSUFFICIENT DATA",
+      "Value Stocks": "INSUFFICIENT DATA",
+      "High Dividend Stocks": "INSUFFICIENT DATA",
+      "High-Yield Bonds": "INSUFFICIENT DATA",
+      "Investment-Grade Bonds": "INSUFFICIENT DATA",
+      "Short Treasuries / T-Bills": "INSUFFICIENT DATA",
+      "Long Treasuries": "INSUFFICIENT DATA",
+      "U.S. Dollar": "INSUFFICIENT DATA",
+      "Gold": "INSUFFICIENT DATA",
+      "Silver": "INSUFFICIENT DATA",
+      "Broad Commodities": "INSUFFICIENT DATA",
+      "Oil": "INSUFFICIENT DATA",
+      "REITs": "INSUFFICIENT DATA",
+      "Utilities": "INSUFFICIENT DATA",
+      "Consumer Staples": "INSUFFICIENT DATA",
+      "Financials": "INSUFFICIENT DATA",
+      "Bitcoin": "INSUFFICIENT DATA",
+      "Crypto ex-BTC": "INSUFFICIENT DATA",
+      "Emerging-Market Stocks": "INSUFFICIENT DATA",
+      "Emerging-Market Bonds": "INSUFFICIENT DATA"
+    },
+    "Deflationary / Funding Crisis": {
+      "S&P 500": "INSUFFICIENT DATA",
+      "Nasdaq / Growth": "INSUFFICIENT DATA",
+      "Small Caps": "INSUFFICIENT DATA",
+      "Value Stocks": "INSUFFICIENT DATA",
+      "High Dividend Stocks": "INSUFFICIENT DATA",
+      "High-Yield Bonds": "INSUFFICIENT DATA",
+      "Investment-Grade Bonds": "INSUFFICIENT DATA",
+      "Short Treasuries / T-Bills": "INSUFFICIENT DATA",
+      "Long Treasuries": "INSUFFICIENT DATA",
+      "U.S. Dollar": "INSUFFICIENT DATA",
+      "Gold": "INSUFFICIENT DATA",
+      "Silver": "INSUFFICIENT DATA",
+      "Broad Commodities": "INSUFFICIENT DATA",
+      "Oil": "INSUFFICIENT DATA",
+      "REITs": "INSUFFICIENT DATA",
+      "Utilities": "INSUFFICIENT DATA",
+      "Consumer Staples": "INSUFFICIENT DATA",
+      "Financials": "INSUFFICIENT DATA",
+      "Bitcoin": "INSUFFICIENT DATA",
+      "Crypto ex-BTC": "INSUFFICIENT DATA",
+      "Emerging-Market Stocks": "INSUFFICIENT DATA",
+      "Emerging-Market Bonds": "INSUFFICIENT DATA"
+    }
+  },
+  "empirical_detail": {
+    "Liquidity Expansion": {
+      "S&P 500": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Nasdaq / Growth": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Small Caps": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Value Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High Dividend Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High-Yield Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Investment-Grade Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Short Treasuries / T-Bills": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Long Treasuries": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "U.S. Dollar": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Gold": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Silver": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Broad Commodities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Oil": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "REITs": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Utilities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Consumer Staples": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Financials": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Bitcoin": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Crypto ex-BTC": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      }
+    },
+    "Neutral / Balanced": {
+      "S&P 500": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Nasdaq / Growth": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Small Caps": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Value Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High Dividend Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High-Yield Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Investment-Grade Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Short Treasuries / T-Bills": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Long Treasuries": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "U.S. Dollar": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Gold": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Silver": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Broad Commodities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Oil": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "REITs": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Utilities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Consumer Staples": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Financials": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Bitcoin": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Crypto ex-BTC": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      }
+    },
+    "Inflationary Tightening": {
+      "S&P 500": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Nasdaq / Growth": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Small Caps": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Value Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High Dividend Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High-Yield Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Investment-Grade Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Short Treasuries / T-Bills": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Long Treasuries": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "U.S. Dollar": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Gold": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Silver": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Broad Commodities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Oil": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "REITs": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Utilities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Consumer Staples": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Financials": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Bitcoin": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Crypto ex-BTC": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      }
+    },
+    "Funding / Credit Stress": {
+      "S&P 500": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Nasdaq / Growth": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Small Caps": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Value Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High Dividend Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High-Yield Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Investment-Grade Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Short Treasuries / T-Bills": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Long Treasuries": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "U.S. Dollar": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Gold": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Silver": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Broad Commodities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Oil": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "REITs": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Utilities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Consumer Staples": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Financials": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Bitcoin": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Crypto ex-BTC": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      }
+    },
+    "Deflationary / Funding Crisis": {
+      "S&P 500": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Nasdaq / Growth": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Small Caps": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Value Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High Dividend Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "High-Yield Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Investment-Grade Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Short Treasuries / T-Bills": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Long Treasuries": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "U.S. Dollar": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Gold": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Silver": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Broad Commodities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Oil": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "REITs": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Utilities": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Consumer Staples": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Financials": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Bitcoin": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Crypto ex-BTC": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Stocks": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      },
+      "Emerging-Market Bonds": {
+        "direction": "INSUFFICIENT DATA",
+        "n": 0,
+        "mean_return": null,
+        "frac_positive": null
+      }
+    }
+  },
+  "out_of_sample_comparison": {
+    "empirical_derived": {
+      "hits": 0,
+      "total": 0,
+      "hit_rate": null
+    },
+    "original_handtyped": {
+      "hits": 111,
+      "total": 248,
+      "hit_rate": 0.4476
+    }
+  }
+}
