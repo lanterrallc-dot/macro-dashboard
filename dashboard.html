@@ -382,6 +382,9 @@ function computeModel(S){
   const fxLegs=[jpyScore,eurScore,cnyScore,chfScore,audScore,dxyFxScore];
   const fxStress = fxLegs.some(v=>v===null) ? null : 0.3*jpyScore+0.15*eurScore+0.2*cnyScore+0.1*chfScore+0.1*audScore+0.15*dxyFxScore;
 
+  // Weighting matches refresh_model.py exactly — see that file's comments for
+  // the full rationale (redundancy removal, Credit reweight, unit fix, and
+  // the Liquidity Flow Stress inclusion fix).
   const indicators=[
     {name:'HY Credit Spreads', category:'Credit', weight:.13, reading:hy, units:'bps', score:hyScore, ids:['BAMLH0A0HYM2']},
     {name:'Investment-Grade Spreads', category:'Credit', weight:.07, reading:ig, units:'bps', score:igScore, ids:['BAMLC0A0CM']},
@@ -409,7 +412,7 @@ function computeModel(S){
   indicators.forEach(i=>{ i.weighted = i.score!==null ? i.weight*i.score : null; });
 
   const contributing = indicators.filter(i=>i.weighted!==null && i.weight>0);
-  const overallRisk = contributing.reduce((s,i)=>s+i.weighted,0);
+  const overallRisk = contributing.length>0 ? contributing.reduce((s,i)=>s+i.weighted,0) : null;
   const effectiveWeight = contributing.reduce((s,i)=>s+i.weight,0);
 
   const cats=['Liquidity','Credit','Rates','Market / Macro'];
@@ -653,6 +656,41 @@ function renderAssetOutlook(outlook){
 /* ============ per-asset price-vs-score charts ============ */
 let assetChartInstances = [];
 
+// Same asset -> risk-category mapping as refresh_model.py's ASSET_RISK_MAP,
+// used only in the browser-proxy fallback path (the durable path gets this
+// from the JSON directly, since Python is the single source of truth there).
+const ASSET_RISK_MAP_JS = {
+  'S&P 500':'Market / Macro','Nasdaq / Growth':'Liquidity','Small Caps':'Liquidity',
+  'Value Stocks':'Market / Macro','High Dividend Stocks':'Market / Macro',
+  'High-Yield Bonds':'Credit','Investment-Grade Bonds':'Credit',
+  'Short Treasuries / T-Bills':'Rates','Long Treasuries':'Rates',
+  'U.S. Dollar':'FX Stress','Gold':'Inflationary Pressure','Silver':'Inflationary Pressure',
+  'Broad Commodities':'Inflationary Pressure','Oil':'Inflationary Pressure',
+  'REITs':'Rates','Utilities':'Market / Macro','Consumer Staples':'Market / Macro',
+  'Financials':'Credit','Bitcoin':'Liquidity','Crypto ex-BTC':'Liquidity',
+  'Emerging-Market Stocks':'FX Stress','Emerging-Market Bonds':'Liquidity',
+};
+const RISK_METRIC_COLOR = {
+  'Liquidity':'#f2954a','Credit':'#33c481','Rates':'#e8b93f','Market / Macro':'#e8b93f',
+  'Inflationary Pressure':'#c084fc','FX Stress':'#43c6e0','overall_risk':'#e8b93f',
+};
+
+/** Forward-fills a sparse {date, value} series onto a dense array of target
+ * dates — carries the last known value forward until a newer one arrives.
+ * This is what actually fixes the chart: instead of trying to plot ~60
+ * sparse risk-score dates against ~180 dense daily price dates on a shared
+ * category axis (where most points silently fail to land on a matching
+ * category and render as noise), both datasets end up the same length,
+ * indexed identically, so Chart.js can't misalign them. */
+function forwardFillToDates(sparsePoints, targetDates, key){
+  const sorted = [...sparsePoints].sort((a,b)=> a.date < b.date ? -1 : 1);
+  let i = 0, last = null;
+  return targetDates.map(d=>{
+    while(i < sorted.length && sorted[i].date <= d){ last = sorted[i][key]; i++; }
+    return last;
+  });
+}
+
 function renderAssetCharts(model){
   const grid = document.getElementById('assetChartsGrid');
   const sub = document.getElementById('assetChartsSub');
@@ -670,11 +708,10 @@ function renderAssetCharts(model){
     return;
   }
 
-  sub.textContent = 'DAILY CLOSE · RECOMPUTED EVERY 15-MIN REFRESH · NOT INTRADAY';
-  noteBox.innerHTML = model.priceHistoryNote || `Daily closing prices and a daily-resolution reconstruction of the Overall Risk score, both refreshed every 15 minutes. "Real-time" here means "as of the latest refresh, using the latest available daily close" — not tick-by-tick intraday data.`;
+  sub.textContent = 'DAILY CLOSE · EACH ASSET VS. ITS MOST RELEVANT RISK METRIC · NOT INTRADAY';
+  noteBox.innerHTML = model.priceHistoryNote || `Each asset is charted against the risk sub-metric most relevant to it (Credit for bonds, Rates for Treasuries, FX Stress for the Dollar, etc.) rather than one generic Overall Risk line for everything. Daily closing prices, refreshed every 15 minutes — not tick-by-tick intraday data.`;
 
-  const riskLabels = riskHist.map(p=>p.date);
-  const riskValues = riskHist.map(p=>p.overall_risk);
+  const riskMap = model.assetRiskMap || ASSET_RISK_MAP_JS;
 
   model.assetOutlook.assets.forEach(a=>{
     const card = document.createElement('div');
@@ -687,15 +724,21 @@ function renderAssetCharts(model){
       return;
     }
 
+    const metric = riskMap[a.name] || 'overall_risk';
+    const metricLabel = metric === 'overall_risk' ? 'Overall Risk' : metric;
+    const priceDates = priceSeries.map(p=>p.date);
+    const alignedRiskValues = forwardFillToDates(riskHist, priceDates, metric);
+    const riskColor = RISK_METRIC_COLOR[metric] || '#e8b93f';
+
     const canvasId = 'chart-' + a.name.replace(/[^a-z0-9]/gi,'-');
-    card.innerHTML = `<div class="title">${a.name}</div><div class="sub">${a.ticker}</div><canvas id="${canvasId}"></canvas>`;
+    card.innerHTML = `<div class="title">${a.name}</div><div class="sub">${a.ticker} <span style="color:${riskColor}">vs. ${metricLabel}</span></div><canvas id="${canvasId}"></canvas>`;
     grid.appendChild(card);
 
     const ctx = document.getElementById(canvasId).getContext('2d');
     const chart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: priceSeries.map(p=>p.date),
+        labels: priceDates,
         datasets: [
           {
             label: a.ticker, data: priceSeries.map(p=>p.value),
@@ -703,9 +746,9 @@ function renderAssetCharts(model){
             borderWidth: 1.5, pointRadius: 0, tension: 0.25, yAxisID: 'yPrice', fill: true,
           },
           {
-            label: 'Risk score', data: riskLabels.map((d,i)=>({x:d, y:riskValues[i]})),
-            borderColor: '#e8b93f', borderWidth: 1.5, pointRadius: 0, tension: 0.25,
-            yAxisID: 'yRisk', fill: false, borderDash: [3,2],
+            label: metricLabel, data: alignedRiskValues,
+            borderColor: riskColor, borderWidth: 1.5, pointRadius: 0, tension: 0.15,
+            yAxisID: 'yRisk', fill: false, spanGaps: true,
           },
         ],
       },
@@ -718,12 +761,13 @@ function renderAssetCharts(model){
             backgroundColor:'#151b26', borderColor:'#232b38', borderWidth:1,
             titleColor:'#e7ecf3', bodyColor:'#8b96a8',
             titleFont:{family:'JetBrains Mono', size:10}, bodyFont:{family:'JetBrains Mono', size:10}, padding:8,
+            callbacks:{ label: (ctx)=> `${ctx.dataset.label}: ${ctx.parsed.y!==null? ctx.parsed.y.toFixed(1) : '—'}` },
           },
         },
         scales: {
           x: {type:'category', grid:{display:false}, ticks:{color:'#5b6576', font:{family:'JetBrains Mono', size:8.5}, maxTicksLimit:4, autoSkip:true}},
-          yPrice: {position:'left', grid:{color:'#1a212c'}, ticks:{color:'#5b8def', font:{family:'JetBrains Mono', size:9}, maxTicksLimit:4}},
-          yRisk: {position:'right', min:0, max:100, grid:{display:false}, ticks:{color:'#e8b93f', font:{family:'JetBrains Mono', size:9}, maxTicksLimit:4}},
+          yPrice: {position:'left', grid:{color:'#1a212c'}, ticks:{color:'#5b8def', font:{family:'JetBrains Mono', size:9}, maxTicksLimit:4}, title:{display:true, text:a.ticker, color:'#5b8def', font:{family:'JetBrains Mono', size:9, weight:'600'}}},
+          yRisk: {position:'right', min:0, max:100, grid:{display:false}, ticks:{color:riskColor, font:{family:'JetBrains Mono', size:9}, maxTicksLimit:4}, title:{display:true, text:metricLabel, color:riskColor, font:{family:'JetBrains Mono', size:9, weight:'600'}}},
         },
       },
     });
@@ -755,6 +799,7 @@ function adaptJsonModel(json){
     } : buildAssetOutlook(json.regime),
     assetPriceHistory: json.asset_price_history || null,
     riskHistory: json.risk_history || null,
+    assetRiskMap: json.asset_risk_map || null,
     priceHistoryNote: json.price_history_note || null,
   };
 }
@@ -765,6 +810,13 @@ async function tryLoadDurable(){
     if(!res.ok) return null;
     const json = await res.json();
     if(!json.generated_at) return null;
+    // Guard against a committed-but-empty result (e.g. a run that hit the
+    // refresh script's own safety check but was committed before that
+    // check existed, or any other case where the file has a timestamp but
+    // no real data inside). A timestamp alone isn't enough to trust it —
+    // require at least the headline score to be a real number, otherwise
+    // fall through to the proxy method instead of rendering all dashes.
+    if(json.overall_risk === null || json.overall_risk === undefined) return null;
     return json;
   }catch(e){ return null; }
 }
