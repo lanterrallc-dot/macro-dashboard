@@ -1,0 +1,247 @@
+{
+  "generated_at": "2026-08-25T20:50:04.864972+00:00",
+  "baseline": {
+    "thresholds": {
+      "defl_b6": 60,
+      "defl_b7": 60,
+      "infl_b7": 60,
+      "fund_b6": 55
+    },
+    "hits": 111,
+    "total": 248,
+    "hit_rate": 0.4476
+  },
+  "best": {
+    "thresholds": {
+      "defl_b6": 50,
+      "defl_b7": 30,
+      "infl_b7": 70,
+      "fund_b6": 50
+    },
+    "hits": 116,
+    "total": 251,
+    "hit_rate": 0.4622
+  },
+  "all_results": [
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 70,
+        "fund_b6": 50
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 70,
+        "fund_b6": 60
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 70,
+        "fund_b6": 70
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 70,
+        "fund_b6": 80
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 70,
+        "fund_b6": 90
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 80,
+        "fund_b6": 50
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 80,
+        "fund_b6": 60
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 80,
+        "fund_b6": 70
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 80,
+        "fund_b6": 80
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 80,
+        "fund_b6": 90
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 90,
+        "fund_b6": 50
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 90,
+        "fund_b6": 60
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 90,
+        "fund_b6": 70
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 90,
+        "fund_b6": 80
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 30,
+        "infl_b7": 90,
+        "fund_b6": 90
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 40,
+        "infl_b7": 70,
+        "fund_b6": 50
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 40,
+        "infl_b7": 70,
+        "fund_b6": 60
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 40,
+        "infl_b7": 70,
+        "fund_b6": 70
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 40,
+        "infl_b7": 70,
+        "fund_b6": 80
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    },
+    {
+      "thresholds": {
+        "defl_b6": 50,
+        "defl_b7": 40,
+        "infl_b7": 70,
+        "fund_b6": 90
+      },
+      "hits": 116,
+      "total": 251,
+      "hit_rate": 0.4622
+    }
+  ]
+}
