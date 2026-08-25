@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-08-25T14:08:11.158396+00:00",
+  "generated_at": "2026-08-25T16:18:10.577265+00:00",
   "indicators": [
     {
       "name": "HY Credit Spreads",
       "category": "Credit",
       "weight": 0.13,
-      "reading": 2.7,
+      "reading": 2.69,
       "units": "bps",
       "score": 10,
       "weighted": 1.3
