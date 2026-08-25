@@ -203,6 +203,44 @@ def percentile_score(current, series, asof_date=None, window=500, invert=False):
     return round((100 - pct) if invert else pct, 2)
 
 
+def momentum_percentile_score(series, asof_date=None, window=500, roc_period=20, invert=False):
+    """Percentile rank of the metric's recent `roc_period`-observation
+    CHANGE within its own trailing `window` of such changes — a different
+    question from percentile_score() above. That function asks "is this
+    unusually ELEVATED right now?" (found, via calibration against real
+    HYG/LQD/TLT/BIL/QQQ/SPY forward returns, to behave mostly like a
+    mean-reversion signal). This one asks "is this moving unusually FAST
+    right now?" — tested and found to be a genuine continuation-style
+    signal for Bank Reserves and NFCI specifically (see
+    sensitivity_calibration.json): rapid recent moves in those two
+    predicted the SAME-DIRECTION follow-through in the mapped asset,
+    not a bounce-back.
+
+    `invert` follows the same convention as percentile_score(): pass
+    invert=True when a bigger recent INCREASE means LESS stress in this
+    scoring system's convention (as with Bank Reserves — rising reserves
+    is calmer, not more stressed), so the ranking flips accordingly."""
+    if not series:
+        return None
+    if asof_date is not None:
+        pool_raw = [p['value'] for p in series if p['date'] <= asof_date]
+    else:
+        pool_raw = [p['value'] for p in series]
+    if len(pool_raw) < roc_period + 30:
+        return None
+    roc_series = [pool_raw[i] - pool_raw[i - roc_period] for i in range(roc_period, len(pool_raw))]
+    if len(roc_series) < 30:
+        return None
+    current_roc = roc_series[-1]
+    pool = roc_series[-window:]
+    if len(pool) < 30:
+        return None
+    pool_sorted = sorted(pool)
+    idx = bisect.bisect_left(pool_sorted, current_roc)
+    pct = idx / len(pool_sorted) * 100
+    return round((100 - pct) if invert else pct, 2)
+
+
 def compute_model(S, E):
     """S = dict of FRED series arrays, E = dict of equity series arrays (SPY, RSP)."""
     L = lambda k: obs(S.get(k), 0)
@@ -260,11 +298,17 @@ def compute_model(S, E):
     # by 1000 to convert millions -> billions before scoring restores both to a
     # normal, non-saturated range.
     fedBsScore = clamp(50 - (walcl - 7000000) / 40000, 0, 100) if walcl is not None else None
-    reservesScore = clamp(50 - (wresbal/1000 - 3000) / 20, 0, 100) if wresbal is not None else None
+    # calibrated: rapid reserve BUILD-UPs preceded QQQ gains (r=+0.41 on raw momentum,
+    # n=3319) — inverted so "reserves growing fast" scores LOW (calm), matching this
+    # metric's existing "more reserves = less stress" convention
+    reservesScore = momentum_percentile_score(S.get('WRESBAL', []), window=60, invert=True)
     tgaScore = clamp(20 + (wtregen/1000 - 500) / 10, 0, 100) if wtregen is not None else None
 
     nfci = L('NFCI')
-    nfciScore = clamp(50 + nfci * 35, 0, 100) if nfci is not None else None
+    # calibrated: rapid NFCI TIGHTENING preceded SPY weakness (r=-0.27, n=3317) —
+    # already the right direction for this metric's "higher NFCI = more stress"
+    # convention, no inversion needed
+    nfciScore = momentum_percentile_score(S.get('NFCI', []), window=500)
 
     icsa, icsaP5 = L('ICSA'), P5('ICSA')
     claimsChgPct = (icsa / icsaP5 - 1) * 100 if None not in (icsa, icsaP5) and icsaP5 else None
@@ -546,11 +590,11 @@ def score_all_asof(S, E, date):
 
     walcl, wresbal, wtregen = L('WALCL'), L('WRESBAL'), L('WTREGEN')
     fedBsScore = clamp(50 - (walcl - 7000000) / 40000, 0, 100) if walcl is not None else None
-    reservesScore = clamp(50 - (wresbal/1000 - 3000) / 20, 0, 100) if wresbal is not None else None
+    reservesScore = momentum_percentile_score(S.get('WRESBAL', []), asof_date=date, window=60, invert=True)
     tgaScore = clamp(20 + (wtregen/1000 - 500) / 10, 0, 100) if wtregen is not None else None
 
     nfci = L('NFCI')
-    nfciScore = clamp(50 + nfci * 35, 0, 100) if nfci is not None else None
+    nfciScore = momentum_percentile_score(S.get('NFCI', []), asof_date=date, window=500)
 
     icsa, icsaP5 = L('ICSA'), P5('ICSA')
     econSurpriseScore = None
