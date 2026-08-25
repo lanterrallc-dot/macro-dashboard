@@ -1,0 +1,26 @@
+name: Derive regime-asset mapping
+on:
+  workflow_dispatch: {}
+jobs:
+  derive-mapping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      - name: Install dependencies
+        run: pip install pandas yfinance
+      - name: Run derivation
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python3 derive_regime_mapping.py
+      - name: Commit results
+        run: |
+          git config user.name macro-model-bot
+          git config user.email actions@users.noreply.github.com
+          git add empirical_regime_mapping.json
+          git diff --quiet --cached || git commit -m empirical-regime-mapping
+          git pull --rebase origin main
+          git push
