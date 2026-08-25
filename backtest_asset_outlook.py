@@ -28,6 +28,7 @@ one-off GitHub Actions job (see README).
 Requires: pandas, yfinance  (pip install pandas yfinance)
 """
 
+import bisect
 import json
 import os
 import sys
@@ -165,6 +166,27 @@ def hy_score(d):
     return 100
 
 
+def percentile_score(series, date, window=500):
+    """Percentile rank of the value as of `date` within its own trailing
+    `window` observations up to and including that date — same no-lookahead
+    definition, and the same calibrated windows (750d Credit, 1000d Rates),
+    as refresh_model.py's percentile_score(). Kept in sync by hand since
+    this script has its own pandas-Series-based data structures rather than
+    refresh_model.py's list-of-dicts; both were empirically calibrated
+    against real HYG/LQD/TLT/BIL forward returns (see
+    sensitivity_calibration.json)."""
+    if series is None or series.empty:
+        return None
+    windowed = series.loc[:date]
+    if len(windowed) < 30:
+        return None
+    pool = windowed.iloc[-window:].values
+    current = pool[-1]
+    pool_sorted = sorted(pool)
+    idx = bisect.bisect_left(pool_sorted, current)
+    return idx / len(pool_sorted) * 100
+
+
 def classify_regime_asof(S, date):
     """Reconstruct the Detected Regime as of `date` using only data up to
     that date. Mirrors refresh_model.py's compute_model() math (post-fix
@@ -175,7 +197,8 @@ def classify_regime_asof(S, date):
     P20 = lambda k: asof(S.get(k), date, 20)
 
     hy, ig = L('BAMLH0A0HYM2'), L('BAMLC0A0CM')
-    hyScore, igScore = hy_score(hy), (clamp((ig - 60) / 2.4, 0, 100) if ig is not None else None)
+    hyScore = percentile_score(S.get('BAMLH0A0HYM2'), date, window=750)
+    igScore = percentile_score(S.get('BAMLC0A0CM'), date, window=750)
 
     sofr, iorb, effr, s25, s75 = L('SOFR'), L('IORB'), L('EFFR'), L('SOFR25'), L('SOFR75')
     sofrIorbBps = (sofr - iorb) * 100 if None not in (sofr, iorb) else None
@@ -194,8 +217,8 @@ def classify_regime_asof(S, date):
     vix = L('VIXCLS')
     vixScore = clamp((vix - 12) * 3.2, 0, 100) if vix is not None else None
 
-    y2Score = clamp((dgs2 - 3.5) * 25, 0, 100) if dgs2 is not None else None
-    y10Score = clamp((dgs10 - 4) * 20, 0, 100) if dgs10 is not None else None
+    y2Score = percentile_score(S.get('DGS2'), date, window=1000)
+    y10Score = percentile_score(S.get('DGS10'), date, window=1000)
 
     dxy = L('DTWEXBGS')
     dxyScore = clamp((dxy - 100) * 2, 0, 100) if dxy is not None else None
