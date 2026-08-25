@@ -11,6 +11,7 @@ Run manually:      python3 refresh_model.py
 Run on a schedule:  see .github/workflows/refresh.yml
 """
 
+import bisect
 import json
 import os
 import sys
@@ -167,17 +168,39 @@ def clamp(x, lo, hi):
     return min(hi, max(lo, x))
 
 
-def hy_score(d):
-    if d is None:
+def percentile_score(current, series, asof_date=None, window=500, invert=False):
+    """0-100 score for where `current` sits within its OWN trailing
+    distribution, instead of a fixed absolute threshold.
+
+    Why this exists: fixed thresholds (e.g. "HY spreads under 250bps score
+    ~10") pin a metric near its floor for months whenever the market sits
+    in a calm range within that threshold — the score simply has no room
+    left to move, which looks like "no relationship to anything" on a
+    chart even though the underlying data is moving normally. Scoring
+    relative to the metric's own recent history keeps it responsive in any
+    regime: a move that's unusual FOR THIS METRIC RIGHT NOW registers,
+    even if it would have been unremarkable during a different multi-year
+    period.
+
+    `asof_date`, if given, restricts the comparison pool to observations
+    up to and including that date — required for the historical
+    reconstruction (score_all_asof) to avoid lookahead bias; omit it for
+    live scoring, where "up to now" is just the whole fetched series.
+    `invert=True` for metrics where a HIGHER raw value means LESS stress
+    (e.g. Fed Balance Sheet expansion), so the percentile ranking flips."""
+    if current is None or not series:
         return None
-    if d <= 250: return 10
-    if d <= 300: return 10 + (d - 250) * 0.2
-    if d <= 350: return 20 + (d - 300) * 0.3
-    if d <= 400: return 35 + (d - 350) * 0.3
-    if d <= 500: return 50 + (d - 400) * 0.15
-    if d <= 700: return 65 + (d - 500) * 0.075
-    if d <= 1000: return 80 + (d - 700) * 0.0666667
-    return 100
+    if asof_date is not None:
+        pool = [p['value'] for p in series if p['date'] <= asof_date]
+    else:
+        pool = [p['value'] for p in series]
+    pool = pool[-window:]
+    if len(pool) < 30:
+        return None
+    pool_sorted = sorted(pool)
+    idx = bisect.bisect_left(pool_sorted, current)
+    pct = idx / len(pool_sorted) * 100
+    return round((100 - pct) if invert else pct, 2)
 
 
 def compute_model(S, E):
@@ -188,8 +211,8 @@ def compute_model(S, E):
     P20 = lambda k: obs(S.get(k), 20)
 
     hy, ig = L('BAMLH0A0HYM2'), L('BAMLC0A0CM')
-    hyScore = hy_score(hy)
-    igScore = clamp((ig - 60) / 2.4, 0, 100) if ig is not None else None
+    hyScore = percentile_score(hy, S.get('BAMLH0A0HYM2', []))
+    igScore = percentile_score(ig, S.get('BAMLC0A0CM', []))
 
     sofr, iorb, effr, s25, s75 = L('SOFR'), L('IORB'), L('EFFR'), L('SOFR25'), L('SOFR75')
     sofrIorbBps = (sofr - iorb) * 100 if None not in (sofr, iorb) else None
@@ -214,8 +237,8 @@ def compute_model(S, E):
     vixChgPct = (vix / vixp5 - 1) * 100 if None not in (vix, vixp5) and vixp5 else None
     vixTermProxy = clamp(50 + vixChgPct * 4, 0, 100) if vixChgPct is not None else None
 
-    y2Score = clamp((dgs2 - 3.5) * 25, 0, 100) if dgs2 is not None else None
-    y10Score = clamp((dgs10 - 4) * 20, 0, 100) if dgs10 is not None else None
+    y2Score = percentile_score(dgs2, S.get('DGS2', []))
+    y10Score = percentile_score(dgs10, S.get('DGS10', []))
     t2s10 = L('T10Y2Y')
     curveScore = clamp(50 - 20 * t2s10, 0, 100) if t2s10 is not None else None
 
@@ -490,7 +513,8 @@ def score_all_asof(S, E, date):
     EP20 = lambda k: asof_at(E.get(k, []), date, 20)
 
     hy, ig = L('BAMLH0A0HYM2'), L('BAMLC0A0CM')
-    hyScore, igScore = hy_score(hy), (clamp((ig - 60) / 2.4, 0, 100) if ig is not None else None)
+    hyScore = percentile_score(hy, S.get('BAMLH0A0HYM2', []), asof_date=date)
+    igScore = percentile_score(ig, S.get('BAMLC0A0CM', []), asof_date=date)
 
     sofr, iorb, effr, s25, s75 = L('SOFR'), L('IORB'), L('EFFR'), L('SOFR25'), L('SOFR75')
     sofrIorbBps = (sofr - iorb) * 100 if None not in (sofr, iorb) else None
@@ -511,8 +535,8 @@ def score_all_asof(S, E, date):
     vixChgPct = (vix/vixp5 - 1)*100 if None not in (vix, vixp5) and vixp5 else None
     vixTermProxy = clamp(50 + vixChgPct*4, 0, 100) if vixChgPct is not None else None
 
-    y2Score = clamp((dgs2 - 3.5) * 25, 0, 100) if dgs2 is not None else None
-    y10Score = clamp((dgs10 - 4) * 20, 0, 100) if dgs10 is not None else None
+    y2Score = percentile_score(dgs2, S.get('DGS2', []), asof_date=date)
+    y10Score = percentile_score(dgs10, S.get('DGS10', []), asof_date=date)
 
     dxy = L('DTWEXBGS')
     dxyScore = clamp((dxy - 100) * 2, 0, 100) if dxy is not None else None
