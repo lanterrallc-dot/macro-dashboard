@@ -213,10 +213,20 @@ def momentum_percentile_score(series, date, window=500, roc_period=20, invert=Fa
     return (100 - pct) if invert else pct
 
 
-def classify_regime_asof(S, date):
+DEFAULT_REGIME_THRESHOLDS = {'defl_b6': 60, 'defl_b7': 60, 'infl_b7': 60, 'fund_b6': 55}
+
+
+def classify_regime_asof(S, date, thresholds=None):
     """Reconstruct the Detected Regime as of `date` using only data up to
     that date. Mirrors refresh_model.py's compute_model() math (post-fix
-    weighting), condensed to just what's needed for the regime label."""
+    weighting), condensed to just what's needed for the regime label.
+
+    `thresholds`, if given, overrides the four cutoffs most likely to need
+    recalibration now that Credit and Rates use percentile scoring (a
+    fundamentally different, uniform 0-100 distribution than the original
+    fixed-threshold formulas these cutoffs were tuned against) — see
+    calibrate_regime_thresholds.py. Defaults to the original values so
+    normal (non-calibration) use is unaffected."""
     L = lambda k: asof(S.get(k), date, 0)
     P1 = lambda k: asof(S.get(k), date, 1)
     P5 = lambda k: asof(S.get(k), date, 5)
@@ -314,11 +324,12 @@ def classify_regime_asof(S, date):
 
     if None in (B5, B6, B7, K8, K10):
         return None
-    if B5 >= 60 and B6 >= 60 and (B7 < 60 or K10 >= 70):
+    t = thresholds or DEFAULT_REGIME_THRESHOLDS
+    if B5 >= 60 and B6 >= t['defl_b6'] and (B7 < t['defl_b7'] or K10 >= 70):
         return 'Deflationary / Funding Crisis'
-    if B5 >= 55 and B7 >= 60 and K8 >= 60:
+    if B5 >= 55 and B7 >= t['infl_b7'] and K8 >= 60:
         return 'Inflationary Tightening'
-    if (B5 >= 55 or B6 >= 55) and K10 >= 65:
+    if (B5 >= 55 or B6 >= t['fund_b6']) and K10 >= 65:
         return 'Funding / Credit Stress'
     if B5 <= 30 and K10 < 45:
         return 'Liquidity Expansion'
