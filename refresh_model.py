@@ -54,7 +54,7 @@ def http_get(url, timeout=25, retries=2):
     raise last_err
 
 
-def fetch_fred_series(series_id, days_back=1500):
+def fetch_fred_series(series_id, days_back=4000):
     """Fetches via FRED's official JSON API when FRED_API_KEY is set (far
     more reliable than the public CSV export endpoint, which appears to be
     getting blocked/throttled for GitHub Actions' shared runner IPs — every
