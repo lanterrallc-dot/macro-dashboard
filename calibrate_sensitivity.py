@@ -140,8 +140,10 @@ def calibrate_pair(pair):
         # dashboard chart uses, so scores and prices line up on real dates
         score_df = score.dropna().rename('score').to_frame()
         score_df.index.name = 'date'
-        px_df = px.rename('price').to_frame()
-        px_df.index.name = 'date'
+        score_df.index = score_df.index.astype('datetime64[ns]')  # FRED's API and yfinance
+        px_df = px.rename('price').to_frame()                      # sometimes return indices with
+        px_df.index.name = 'date'                                  # different internal datetime64
+        px_df.index = px_df.index.astype('datetime64[ns]')         # precisions — normalize both
         merged = pd.merge_asof(px_df.sort_index(), score_df.sort_index(),
                                 left_index=True, right_index=True, direction='backward')
         merged = merged.dropna()
