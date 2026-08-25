@@ -1,0 +1,26 @@
+name: Calibrate regime thresholds
+on:
+  workflow_dispatch: {}
+jobs:
+  calibrate-thresholds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      - name: Install dependencies
+        run: pip install pandas yfinance
+      - name: Run threshold calibration
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python3 calibrate_regime_thresholds.py
+      - name: Commit results
+        run: |
+          git config user.name macro-model-bot
+          git config user.email actions@users.noreply.github.com
+          git add regime_threshold_calibration.json
+          git diff --quiet --cached || git commit -m regime-threshold-calibration
+          git pull --rebase origin main
+          git push
