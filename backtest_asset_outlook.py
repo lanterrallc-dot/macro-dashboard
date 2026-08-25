@@ -187,6 +187,32 @@ def percentile_score(series, date, window=500):
     return idx / len(pool_sorted) * 100
 
 
+def momentum_percentile_score(series, date, window=500, roc_period=20, invert=False):
+    """Percentile rank of the metric's recent `roc_period`-observation
+    CHANGE within its own trailing `window` of such changes — the
+    pandas-Series counterpart to refresh_model.py's
+    momentum_percentile_score(), kept in sync by hand. Calibrated windows:
+    Bank Reserves window=60 invert=True, Fed Balance Sheet window=120
+    invert=True, NFCI window=500 (no inversion)."""
+    if series is None or series.empty:
+        return None
+    windowed = series.loc[:date]
+    if len(windowed) < roc_period + 30:
+        return None
+    vals = windowed.values
+    roc = vals[roc_period:] - vals[:-roc_period]
+    if len(roc) < 30:
+        return None
+    current_roc = roc[-1]
+    pool = roc[-window:]
+    if len(pool) < 30:
+        return None
+    pool_sorted = sorted(pool)
+    idx = bisect.bisect_left(pool_sorted, current_roc)
+    pct = idx / len(pool_sorted) * 100
+    return (100 - pct) if invert else pct
+
+
 def classify_regime_asof(S, date):
     """Reconstruct the Detected Regime as of `date` using only data up to
     that date. Mirrors refresh_model.py's compute_model() math (post-fix
@@ -224,12 +250,12 @@ def classify_regime_asof(S, date):
     dxyScore = clamp((dxy - 100) * 2, 0, 100) if dxy is not None else None
 
     walcl, wresbal, wtregen = L('WALCL'), L('WRESBAL'), L('WTREGEN')
-    fedBsScore = clamp(50 - (walcl - 7000000) / 40000, 0, 100) if walcl is not None else None
-    reservesScore = clamp(50 - (wresbal/1000 - 3000) / 20, 0, 100) if wresbal is not None else None
+    fedBsScore = momentum_percentile_score(S.get('WALCL'), date, window=120, invert=True)
+    reservesScore = momentum_percentile_score(S.get('WRESBAL'), date, window=60, invert=True)
     tgaScore = clamp(20 + (wtregen/1000 - 500) / 10, 0, 100) if wtregen is not None else None
 
     nfci = L('NFCI')
-    nfciScore = clamp(50 + nfci * 35, 0, 100) if nfci is not None else None
+    nfciScore = momentum_percentile_score(S.get('NFCI'), date, window=500)
 
     icsa, icsaP5 = L('ICSA'), P5('ICSA')
     econSurpriseScore = None
