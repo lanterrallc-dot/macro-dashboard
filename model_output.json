@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-25T11:04:44.937597+00:00",
+  "generated_at": "2026-08-25T14:08:11.158396+00:00",
   "indicators": [
     {
       "name": "HY Credit Spreads",
@@ -33,10 +33,10 @@
       "name": "Repo-Market Stress",
       "category": "Liquidity",
       "weight": 0.12,
-      "reading": 24.40000000000003,
+      "reading": 25.40000000000001,
       "units": "0\u2013100",
-      "score": 24.40000000000003,
-      "weighted": 2.9280000000000035
+      "score": 25.40000000000001,
+      "weighted": 3.048000000000001
     },
     {
       "name": "Treasury Vol Proxy (MOVE-style)",
@@ -52,20 +52,20 @@
       "name": "VIX",
       "category": "Market / Macro",
       "weight": 0.05,
-      "reading": 15.13,
+      "reading": 15.85,
       "units": "index",
-      "score": 10.016000000000004,
-      "weighted": 0.5008000000000002
+      "score": 12.32,
+      "weighted": 0.6160000000000001
     },
     {
       "name": "VIX Momentum Proxy (5D)",
       "category": "Market / Macro",
       "weight": 0.05,
-      "reading": 74.70175438596493,
+      "reading": 67.37985516787361,
       "units": "0\u2013100",
-      "score": 74.70175438596493,
+      "score": 67.37985516787361,
       "source_note": "transform of VIX\u2019s own 5-day change \u2014 not real futures term-structure data",
-      "weighted": 3.735087719298247
+      "weighted": 3.3689927583936807
     },
     {
       "name": "2Y Treasury Yield",
@@ -200,13 +200,13 @@
       "weighted": 6.2689604
     }
   ],
-  "overall_risk": 29.259756685366344,
+  "overall_risk": 29.128861724461775,
   "effective_weight": 0.9200000000000003,
   "category_scores": {
-    "Liquidity": 48.43844486111112,
+    "Liquidity": 48.77177819444445,
     "Credit": 6.5,
     "Rates": 15.256250000000035,
-    "Market / Macro": 40.40458267683166
+    "Market / Macro": 39.15010787230882
   },
   "inflationary_pressure": 25.226712500000012,
   "fx_stress": 49.33502412440073,
@@ -664,11 +664,11 @@
     },
     {
       "date": "2026-08-25",
-      "overall_risk": 29.26
+      "overall_risk": 29.13
     },
     {
       "date": "2026-08-25",
-      "overall_risk": 29.26
+      "overall_risk": 29.13
     }
   ],
   "price_history_note": "Daily closing prices (Stooq) and a daily-resolution reconstruction of the Overall Risk score, both refreshed on this 15-minute schedule. \"Real-time\" here means \"as of the latest 15-minute refresh, using the latest available daily close\" \u2014 not intraday tick data."
