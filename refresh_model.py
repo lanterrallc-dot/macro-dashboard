@@ -297,7 +297,10 @@ def compute_model(S, E):
     # was pinned at 0 and TGA was pinned at 100 in the original workbook. Dividing
     # by 1000 to convert millions -> billions before scoring restores both to a
     # normal, non-saturated range.
-    fedBsScore = clamp(50 - (walcl - 7000000) / 40000, 0, 100) if walcl is not None else None
+    # calibrated: rapid Fed balance-sheet EXPANSION preceded QQQ gains (r=+0.23 on raw
+    # momentum, n=3319) — inverted so "balance sheet growing fast" scores LOW (calm),
+    # matching this metric's existing "bigger balance sheet = less stress" convention
+    fedBsScore = momentum_percentile_score(S.get('WALCL', []), window=120, invert=True)
     # calibrated: rapid reserve BUILD-UPs preceded QQQ gains (r=+0.41 on raw momentum,
     # n=3319) — inverted so "reserves growing fast" scores LOW (calm), matching this
     # metric's existing "more reserves = less stress" convention
@@ -589,7 +592,7 @@ def score_all_asof(S, E, date):
     dxyScore = clamp((dxy - 100) * 2, 0, 100) if dxy is not None else None
 
     walcl, wresbal, wtregen = L('WALCL'), L('WRESBAL'), L('WTREGEN')
-    fedBsScore = clamp(50 - (walcl - 7000000) / 40000, 0, 100) if walcl is not None else None
+    fedBsScore = momentum_percentile_score(S.get('WALCL', []), asof_date=date, window=120, invert=True)
     reservesScore = momentum_percentile_score(S.get('WRESBAL', []), asof_date=date, window=60, invert=True)
     tgaScore = clamp(20 + (wtregen/1000 - 500) / 10, 0, 100) if wtregen is not None else None
 
