@@ -590,7 +590,7 @@ let BACKTEST_DATA = null;
 
 async function tryLoadBacktest(){
   try{
-    const res = await fetch('./asset_outlook_backtest.json', {cache:'no-store'});
+    const res = await fetch('./asset_outlook_backtest.json?v=' + Date.now(), {cache:'no-store'});
     if(!res.ok) return null;
     const json = await res.json();
     if(!json.new_model) return null;
@@ -817,7 +817,7 @@ function adaptJsonModel(json){
 
 async function tryLoadDurable(){
   try{
-    const res = await fetch(DATA_URL, {cache:'no-store'});
+    const res = await fetch(DATA_URL + '?v=' + Date.now(), {cache:'no-store'});
     if(!res.ok) return null;
     const json = await res.json();
     if(!json.generated_at) return null;
