@@ -29,7 +29,7 @@ FRED_SERIES = [
     'DEXCHUS', 'DEXSZUS', 'DEXUSAL',
 ]
 
-STOOQ_TICKERS = {'SPY': 'spy.us', 'RSP': 'rsp.us'}
+STOOQ_TICKERS = {'SPY': 'SPY', 'RSP': 'RSP'}  # kept name for minimal downstream diff; now yfinance symbols
 
 UA = {'User-Agent': 'Mozilla/5.0 (macro-liquidity-model-refresh)'}
 
@@ -108,26 +108,37 @@ def fetch_fred_series(series_id, days_back=800):
     return out
 
 
-def fetch_stooq_series(ticker, days_back=120):
-    url = f'https://stooq.com/q/d/l/?s={ticker}&i=d'
+def fetch_yfinance_bulk(tickers, days_back=220):
+    """Fetches all requested tickers' price history in a single yfinance
+    call (same library already proven working in backtest_asset_outlook.py
+    today, on this same infrastructure). Returns a dict keyed by ticker,
+    each value a list of {'date','value'} dicts in the same shape the rest
+    of this script already expects from the old Stooq fetcher, so nothing
+    downstream needs to change."""
     try:
-        text = http_get(url)
-    except (urllib.error.URLError, TimeoutError) as e:
-        print(f'  WARN: stooq {ticker} fetch failed: {e}', file=sys.stderr)
-        return []
-    out = []
-    lines = text.strip().splitlines()
-    if not lines or not lines[0].lower().startswith('date'):
-        return []
-    for line in lines[1:]:
-        parts = line.split(',')
-        if len(parts) < 5:
-            continue
+        import yfinance as yf
+    except ImportError:
+        print('  WARN: yfinance not installed — equity/breadth data unavailable this run', file=sys.stderr)
+        return {t: [] for t in tickers}
+
+    start = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime('%Y-%m-%d')
+    try:
+        df = yf.download(tickers, start=start, progress=False, auto_adjust=True,
+                          group_by='ticker', threads=True)
+    except Exception as e:
+        print(f'  WARN: yfinance bulk download failed: {e}', file=sys.stderr)
+        return {t: [] for t in tickers}
+
+    result = {}
+    for t in tickers:
         try:
-            out.append({'date': parts[0].strip(), 'value': float(parts[4].strip())})  # close
-        except ValueError:
-            continue
-    return out[-days_back:]
+            series = df['Close'] if len(tickers) == 1 else df[t]['Close']
+            series = series.dropna()
+            result[t] = [{'date': idx.strftime('%Y-%m-%d'), 'value': float(v)} for idx, v in series.items()]
+        except Exception as e:
+            print(f'  WARN: {t} yfinance parse failed: {e}', file=sys.stderr)
+            result[t] = []
+    return result
 
 
 def obs(arr, back):
@@ -450,17 +461,16 @@ def build_asset_outlook(regime):
     }
 
 
-# Stooq symbol for each asset's price history (used for the price-vs-score
-# charts). Stooq's US-listed ETF convention is <ticker>.us; crypto uses a
-# plain <coin>usd pair with no suffix.
+# yfinance symbol for each asset's price history (used for the price-vs-score
+# charts). Same tickers backtest_asset_outlook.py already uses successfully.
 STOOQ_ASSET_MAP = {
-    'S&P 500': 'spy.us', 'Nasdaq / Growth': 'qqq.us', 'Small Caps': 'iwm.us',
-    'Value Stocks': 'vtv.us', 'High Dividend Stocks': 'vym.us', 'High-Yield Bonds': 'hyg.us',
-    'Investment-Grade Bonds': 'lqd.us', 'Short Treasuries / T-Bills': 'bil.us',
-    'Long Treasuries': 'tlt.us', 'U.S. Dollar': 'uup.us', 'Gold': 'gld.us', 'Silver': 'slv.us',
-    'Broad Commodities': 'dbc.us', 'Oil': 'uso.us', 'REITs': 'vnq.us', 'Utilities': 'xlu.us',
-    'Consumer Staples': 'xlp.us', 'Financials': 'xlf.us', 'Bitcoin': 'btcusd',
-    'Crypto ex-BTC': 'ethusd', 'Emerging-Market Stocks': 'eem.us', 'Emerging-Market Bonds': 'emb.us',
+    'S&P 500': 'SPY', 'Nasdaq / Growth': 'QQQ', 'Small Caps': 'IWM',
+    'Value Stocks': 'VTV', 'High Dividend Stocks': 'VYM', 'High-Yield Bonds': 'HYG',
+    'Investment-Grade Bonds': 'LQD', 'Short Treasuries / T-Bills': 'BIL',
+    'Long Treasuries': 'TLT', 'U.S. Dollar': 'UUP', 'Gold': 'GLD', 'Silver': 'SLV',
+    'Broad Commodities': 'DBC', 'Oil': 'USO', 'REITs': 'VNQ', 'Utilities': 'XLU',
+    'Consumer Staples': 'XLP', 'Financials': 'XLF', 'Bitcoin': 'BTC-USD',
+    'Crypto ex-BTC': 'ETH-USD', 'Emerging-Market Stocks': 'EEM', 'Emerging-Market Bonds': 'EMB',
 }
 
 
@@ -594,22 +604,25 @@ def main():
               file=sys.stderr)
         sys.exit(1)
 
-    print('Fetching equity series (Stooq)...')
+    print('Fetching equity/asset price data (yfinance, single bulk call)...')
+    all_yf_tickers = sorted(set(list(STOOQ_TICKERS.values()) + list(STOOQ_ASSET_MAP.values())))
+    yf_data = fetch_yfinance_bulk(all_yf_tickers, days_back=220)
+
     E = {}
     for name, ticker in STOOQ_TICKERS.items():
-        arr = fetch_stooq_series(ticker, days_back=220)  # needs enough runway for the
-        E[name] = arr                                     # 180-day risk-history reconstruction below
-        print(f'  {name}: {len(arr)} obs' if arr else f'  {name}: FAILED')
+        arr = yf_data.get(ticker, [])
+        E[name] = arr
+        print(f'  {name} ({ticker}): {len(arr)} obs' if arr else f'  {name} ({ticker}): FAILED')
 
     print('Computing model...')
     model = compute_model(S, E)
 
-    print('Fetching per-asset price history (Stooq, ~180 days) for the price-vs-score charts...')
+    print('Building per-asset price history for the price-vs-score charts...')
     asset_price_history = {}
     for name, symbol in STOOQ_ASSET_MAP.items():
-        arr = fetch_stooq_series(symbol, days_back=180)
-        asset_price_history[name] = arr
-        print(f'  {name} ({symbol}): {len(arr)} obs' if arr else f'  {name} ({symbol}): FAILED')
+        arr = yf_data.get(symbol, [])
+        asset_price_history[name] = arr[-180:] if arr else []
+        print(f'  {name} ({symbol}): {len(asset_price_history[name])} obs' if arr else f'  {name} ({symbol}): FAILED')
 
     print('Reconstructing Overall Risk history (~180 days, sampled every 3 days)...')
     today = datetime.now(timezone.utc).date()
