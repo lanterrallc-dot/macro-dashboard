@@ -474,13 +474,13 @@ STOOQ_ASSET_MAP = {
 }
 
 
-def score_overall_risk_asof(S, E, date):
-    """Recomputes the Overall Risk score as of a historical date, using the
-    same corrected/de-duplicated weights as compute_model() but sourcing
-    every value via asof_at() instead of the live obs(). Returns None if
-    too much required data is missing at that date (e.g. too early in the
-    lookback window). Lean by design — just the number, not the full
-    indicator breakdown, since this runs in a loop over many dates."""
+def score_all_asof(S, E, date):
+    """Recomputes every sub-score (not just Overall Risk) as of a historical
+    date, using the same corrected/de-duplicated weights as compute_model()
+    but sourcing every value via asof_at() instead of the live obs(). This
+    is what lets each asset's chart show the risk category actually
+    relevant to it (Credit for HY bonds, Rates for Treasuries, etc.)
+    instead of one generic Overall Risk line for every asset."""
     L = lambda k: asof_at(S.get(k, []), date, 0)
     P1 = lambda k: asof_at(S.get(k, []), date, 1)
     P5 = lambda k: asof_at(S.get(k, []), date, 5)
@@ -559,6 +559,40 @@ def score_overall_risk_asof(S, E, date):
     breadthStress = clamp(50-(breadth5D*10+breadth20D*5),0,100) if None not in (breadth5D,breadth20D) else None
     participationMomentum = clamp(50-(breadth5D*15+breadth20D*10),0,100) if None not in (breadth5D,breadth20D) else None
 
+    credit_rows = [(hyScore, .13), (igScore, .07)]
+    liquidity_rows = [(repoScore, .12), (dxyScore, .05), (fedBsScore, .03), (reservesScore, .04), (tgaScore, .04), (liqFlowComposite, .08)]
+    rates_rows = [(treasuryVolStress, .07), (y2Score, .05), (y10Score, .04)]
+    market_rows = [(vixScore, .05), (vixTermProxy, .05), (nfciScore, .04), (breadthStress, .05), (participationMomentum, .03), (econSurpriseScore, .03), (inflationLaborScore, .03)]
+
+    def cat_avg(rows):
+        valid = [(s, w) for s, w in rows if s is not None]
+        if not valid:
+            return None
+        wsum = sum(w for _, w in valid)
+        return sum(s*w for s, w in valid) / wsum if wsum > 0 else None
+
+    liquidity_score = cat_avg(liquidity_rows)
+    credit_score = cat_avg(credit_rows)
+    rates_score = cat_avg(rates_rows)
+    market_score = cat_avg(market_rows)
+
+    fedExpScore = 0.6*y2Score + 0.4*clamp(50+sofrIorbBps*4,0,100) if None not in (y2Score, sofrIorbBps) else None
+    inflationary_pressure = None
+    if None not in (rates_score, fedExpScore, dxyScore):
+        inflationary_pressure = clamp(0.45*rates_score + 0.3*fedExpScore + 0.25*dxyScore, 0, 100)
+
+    def fx_leg(sid, invert):
+        c, d, e, f = L(sid), P1(sid), P5(sid), P20(sid)
+        if None in (c, d, e, f) or not d or not e or not f:
+            return None
+        g, h, i = c/d-1, c/e-1, c/f-1
+        raw = (50-250*g-120*h-60*i) if invert else (50+250*g+120*h+60*i)
+        return clamp(raw, 0, 100)
+
+    fx_legs = [fx_leg('DEXJPUS', True), fx_leg('DEXUSEU', True), fx_leg('DEXCHUS', False),
+               fx_leg('DEXSZUS', True), fx_leg('DEXUSAL', True), fx_leg('DTWEXBGS', False)]
+    fx_stress = None if None in fx_legs else (0.3*fx_legs[0]+0.15*fx_legs[1]+0.2*fx_legs[2]+0.1*fx_legs[3]+0.1*fx_legs[4]+0.15*fx_legs[5])
+
     weighted_scores = [
         (hyScore, .13), (igScore, .07), (repoScore, .12), (treasuryVolStress, .07),
         (vixScore, .05), (vixTermProxy, .05), (y2Score, .05), (y10Score, .04),
@@ -567,9 +601,34 @@ def score_overall_risk_asof(S, E, date):
         (econSurpriseScore, .03), (inflationLaborScore, .03), (liqFlowComposite, .08),
     ]
     contributing = [(s, w) for s, w in weighted_scores if s is not None]
-    if not contributing:
-        return None
-    return sum(s*w for s, w in contributing)
+    overall_risk = sum(s*w for s, w in contributing) if contributing else None
+
+    return {
+        'overall_risk': round(overall_risk, 2) if overall_risk is not None else None,
+        'Liquidity': round(liquidity_score, 2) if liquidity_score is not None else None,
+        'Credit': round(credit_score, 2) if credit_score is not None else None,
+        'Rates': round(rates_score, 2) if rates_score is not None else None,
+        'Market / Macro': round(market_score, 2) if market_score is not None else None,
+        'Inflationary Pressure': round(inflationary_pressure, 2) if inflationary_pressure is not None else None,
+        'FX Stress': round(fx_stress, 2) if fx_stress is not None else None,
+    }
+
+
+# Which risk sub-score is most relevant to each asset, derived from each
+# asset's own "why it moves" column in ASSET_TABLE above. This is a
+# judgment call, not a precise science — the point is "more relevant than
+# always showing Overall Risk for everything," not a claim of precision.
+ASSET_RISK_MAP = {
+    'S&P 500': 'Market / Macro', 'Nasdaq / Growth': 'Liquidity', 'Small Caps': 'Liquidity',
+    'Value Stocks': 'Market / Macro', 'High Dividend Stocks': 'Market / Macro',
+    'High-Yield Bonds': 'Credit', 'Investment-Grade Bonds': 'Credit',
+    'Short Treasuries / T-Bills': 'Rates', 'Long Treasuries': 'Rates',
+    'U.S. Dollar': 'FX Stress', 'Gold': 'Inflationary Pressure', 'Silver': 'Inflationary Pressure',
+    'Broad Commodities': 'Inflationary Pressure', 'Oil': 'Inflationary Pressure',
+    'REITs': 'Rates', 'Utilities': 'Market / Macro', 'Consumer Staples': 'Market / Macro',
+    'Financials': 'Credit', 'Bitcoin': 'Liquidity', 'Crypto ex-BTC': 'Liquidity',
+    'Emerging-Market Stocks': 'FX Stress', 'Emerging-Market Bonds': 'Liquidity',
+}
 
 
 def main():
@@ -624,26 +683,35 @@ def main():
         asset_price_history[name] = arr[-180:] if arr else []
         print(f'  {name} ({symbol}): {len(asset_price_history[name])} obs' if arr else f'  {name} ({symbol}): FAILED')
 
-    print('Reconstructing Overall Risk history (~180 days, sampled every 3 days)...')
+    print('Reconstructing full risk-score history (~180 days, every metric, sampled every 3 days)...')
     today = datetime.now(timezone.utc).date()
     risk_history = []
     for i in range(180, -1, -3):
         d = (today - timedelta(days=i)).isoformat()
-        score = score_overall_risk_asof(S, E, d)
-        if score is not None:
-            risk_history.append({'date': d, 'overall_risk': round(score, 2)})
+        scores = score_all_asof(S, E, d)
+        if scores['overall_risk'] is not None:
+            risk_history.append({'date': d, **scores})
     # always include the live figure as the most recent point, even if the
     # sampling loop's last step landed a day or two short of today
     if model['overall_risk'] is not None:
-        risk_history.append({'date': today.isoformat(), 'overall_risk': round(model['overall_risk'], 2)})
-    print(f'  {len(risk_history)} risk-history points reconstructed')
+        live_point = {'date': today.isoformat(), 'overall_risk': round(model['overall_risk'], 2)}
+        for cat in ['Liquidity', 'Credit', 'Rates', 'Market / Macro']:
+            v = model['category_scores'].get(cat)
+            live_point[cat] = round(v, 2) if v is not None else None
+        live_point['Inflationary Pressure'] = round(model['inflationary_pressure'], 2) if model['inflationary_pressure'] is not None else None
+        live_point['FX Stress'] = round(model['fx_stress'], 2) if model['fx_stress'] is not None else None
+        risk_history.append(live_point)
+    print(f'  {len(risk_history)} risk-history points reconstructed (overall + 6 sub-metrics each)')
 
     model['asset_price_history'] = asset_price_history
     model['risk_history'] = risk_history
-    model['price_history_note'] = ('Daily closing prices (Stooq) and a daily-resolution reconstruction of '
-                                    'the Overall Risk score, both refreshed on this 15-minute schedule. '
-                                    '"Real-time" here means "as of the latest 15-minute refresh, using the '
-                                    'latest available daily close" — not intraday tick data.')
+    model['asset_risk_map'] = ASSET_RISK_MAP
+    model['price_history_note'] = ('Daily closing prices and a daily-resolution reconstruction of the risk '
+                                    'scores, both refreshed on this 15-minute schedule. Each asset is charted '
+                                    'against the risk sub-metric most relevant to it (e.g. Credit for HY bonds, '
+                                    'Rates for Treasuries, FX Stress for the Dollar), not a single generic '
+                                    'Overall Risk line for everything. "Real-time" here means "as of the latest '
+                                    '15-minute refresh, using the latest available daily close" — not intraday tick data.')
 
     with open('model_output.json', 'w') as f:
         json.dump(model, f, indent=2)
