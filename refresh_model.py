@@ -54,7 +54,7 @@ def http_get(url, timeout=25, retries=2):
     raise last_err
 
 
-def fetch_fred_series(series_id, days_back=800):
+def fetch_fred_series(series_id, days_back=1500):
     """Fetches via FRED's official JSON API when FRED_API_KEY is set (far
     more reliable than the public CSV export endpoint, which appears to be
     getting blocked/throttled for GitHub Actions' shared runner IPs — every
@@ -211,8 +211,10 @@ def compute_model(S, E):
     P20 = lambda k: obs(S.get(k), 20)
 
     hy, ig = L('BAMLH0A0HYM2'), L('BAMLC0A0CM')
-    hyScore = percentile_score(hy, S.get('BAMLH0A0HYM2', []))
-    igScore = percentile_score(ig, S.get('BAMLC0A0CM', []))
+    # window=750 calibrated against real HYG/LQD forward returns
+    # (see calibrate_sensitivity.py / sensitivity_calibration.json)
+    hyScore = percentile_score(hy, S.get('BAMLH0A0HYM2', []), window=750)
+    igScore = percentile_score(ig, S.get('BAMLC0A0CM', []), window=750)
 
     sofr, iorb, effr, s25, s75 = L('SOFR'), L('IORB'), L('EFFR'), L('SOFR25'), L('SOFR75')
     sofrIorbBps = (sofr - iorb) * 100 if None not in (sofr, iorb) else None
@@ -237,8 +239,9 @@ def compute_model(S, E):
     vixChgPct = (vix / vixp5 - 1) * 100 if None not in (vix, vixp5) and vixp5 else None
     vixTermProxy = clamp(50 + vixChgPct * 4, 0, 100) if vixChgPct is not None else None
 
-    y2Score = percentile_score(dgs2, S.get('DGS2', []))
-    y10Score = percentile_score(dgs10, S.get('DGS10', []))
+    # window=1000 calibrated against real TLT/BIL forward returns
+    y2Score = percentile_score(dgs2, S.get('DGS2', []), window=1000)
+    y10Score = percentile_score(dgs10, S.get('DGS10', []), window=1000)
     t2s10 = L('T10Y2Y')
     curveScore = clamp(50 - 20 * t2s10, 0, 100) if t2s10 is not None else None
 
@@ -513,8 +516,8 @@ def score_all_asof(S, E, date):
     EP20 = lambda k: asof_at(E.get(k, []), date, 20)
 
     hy, ig = L('BAMLH0A0HYM2'), L('BAMLC0A0CM')
-    hyScore = percentile_score(hy, S.get('BAMLH0A0HYM2', []), asof_date=date)
-    igScore = percentile_score(ig, S.get('BAMLC0A0CM', []), asof_date=date)
+    hyScore = percentile_score(hy, S.get('BAMLH0A0HYM2', []), asof_date=date, window=750)
+    igScore = percentile_score(ig, S.get('BAMLC0A0CM', []), asof_date=date, window=750)
 
     sofr, iorb, effr, s25, s75 = L('SOFR'), L('IORB'), L('EFFR'), L('SOFR25'), L('SOFR75')
     sofrIorbBps = (sofr - iorb) * 100 if None not in (sofr, iorb) else None
@@ -535,8 +538,8 @@ def score_all_asof(S, E, date):
     vixChgPct = (vix/vixp5 - 1)*100 if None not in (vix, vixp5) and vixp5 else None
     vixTermProxy = clamp(50 + vixChgPct*4, 0, 100) if vixChgPct is not None else None
 
-    y2Score = percentile_score(dgs2, S.get('DGS2', []), asof_date=date)
-    y10Score = percentile_score(dgs10, S.get('DGS10', []), asof_date=date)
+    y2Score = percentile_score(dgs2, S.get('DGS2', []), asof_date=date, window=1000)
+    y10Score = percentile_score(dgs10, S.get('DGS10', []), asof_date=date, window=1000)
 
     dxy = L('DTWEXBGS')
     dxyScore = clamp((dxy - 100) * 2, 0, 100) if dxy is not None else None
