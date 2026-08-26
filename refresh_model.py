@@ -685,6 +685,11 @@ def score_all_asof(S, E, date):
         'Market / Macro': round(market_score, 2) if market_score is not None else None,
         'Inflationary Pressure': round(inflationary_pressure, 2) if inflationary_pressure is not None else None,
         'FX Stress': round(fx_stress, 2) if fx_stress is not None else None,
+        # tracked as its own field (not folded into the Liquidity blend) because
+        # it's the one metric-asset pairing with a genuinely validated, real
+        # out-of-sample relationship (see asset_signals.json) — BIL vs. this
+        # exact score, not vs. the diluted 6-component Liquidity category
+        'Fed Balance Sheet': round(fedBsScore, 2) if fedBsScore is not None else None,
     }
 
 
@@ -692,11 +697,16 @@ def score_all_asof(S, E, date):
 # asset's own "why it moves" column in ASSET_TABLE above. This is a
 # judgment call, not a precise science — the point is "more relevant than
 # always showing Overall Risk for everything," not a claim of precision.
+# Exception: 'Short Treasuries / T-Bills' -> 'Fed Balance Sheet' is NOT a
+# judgment call — it's the one pairing in this whole table with a real,
+# validated out-of-sample relationship (train r=-0.84 n=98, test r=-0.74
+# n=69; see derive_asset_signals.py / asset_signals.json). Every other
+# entry here is illustrative grouping, not a backtested claim.
 ASSET_RISK_MAP = {
     'S&P 500': 'Market / Macro', 'Nasdaq / Growth': 'Liquidity', 'Small Caps': 'Liquidity',
     'Value Stocks': 'Market / Macro', 'High Dividend Stocks': 'Market / Macro',
     'High-Yield Bonds': 'Credit', 'Investment-Grade Bonds': 'Credit',
-    'Short Treasuries / T-Bills': 'Rates', 'Long Treasuries': 'Rates',
+    'Short Treasuries / T-Bills': 'Fed Balance Sheet', 'Long Treasuries': 'Rates',
     'U.S. Dollar': 'FX Stress', 'Gold': 'Inflationary Pressure', 'Silver': 'Inflationary Pressure',
     'Broad Commodities': 'Inflationary Pressure', 'Oil': 'Inflationary Pressure',
     'REITs': 'Rates', 'Utilities': 'Market / Macro', 'Consumer Staples': 'Market / Macro',
@@ -774,6 +784,8 @@ def main():
             live_point[cat] = round(v, 2) if v is not None else None
         live_point['Inflationary Pressure'] = round(model['inflationary_pressure'], 2) if model['inflationary_pressure'] is not None else None
         live_point['FX Stress'] = round(model['fx_stress'], 2) if model['fx_stress'] is not None else None
+        fedbs_indicator = next((i for i in model['indicators'] if i['name'] == 'Fed Balance Sheet'), None)
+        live_point['Fed Balance Sheet'] = round(fedbs_indicator['score'], 2) if fedbs_indicator and fedbs_indicator['score'] is not None else None
         risk_history.append(live_point)
     print(f'  {len(risk_history)} risk-history points reconstructed (overall + 6 sub-metrics each)')
 
@@ -782,9 +794,12 @@ def main():
     model['asset_risk_map'] = ASSET_RISK_MAP
     model['price_history_note'] = ('Daily closing prices and a daily-resolution reconstruction of the risk '
                                     'scores, both refreshed on this 15-minute schedule. Each asset is charted '
-                                    'against the risk sub-metric most relevant to it (e.g. Credit for HY bonds, '
-                                    'Rates for Treasuries, FX Stress for the Dollar), not a single generic '
-                                    'Overall Risk line for everything. "Real-time" here means "as of the latest '
+                                    'against a risk sub-metric grouping — but a rigorous out-of-sample test '
+                                    '(train/test split, no regime bucket, one metric tested per asset '
+                                    'independently) found a real, holding-up relationship for only 1 of 22 '
+                                    'assets: Short Treasuries / T-Bills vs. Fed Balance Sheet (marked with a '
+                                    '\u2713 badge below). Every other pairing here is an illustrative grouping, '
+                                    'not a validated predictor. "Real-time" here means "as of the latest '
                                     '15-minute refresh, using the latest available daily close" — not intraday tick data.')
 
     with open('model_output.json', 'w') as f:
