@@ -123,7 +123,7 @@ def main():
     if isinstance(prices, pd.Series):
         prices = prices.to_frame()
 
-    overall_start = max(s.index.min() for s in S.values() if len(s))
+    overall_start = min(s.index.min() for s in S.values() if len(s))
     overall_end = min(prices.index.max(), max(s.index.max() for s in S.values() if len(s)))
     full_range = pd.date_range(overall_start, overall_end, freq='D')
     split_point = full_range[int(len(full_range) * 0.6)]
@@ -157,7 +157,8 @@ def main():
         best = max(candidates, key=lambda c: abs(c['train_corr']))
         test_corr, test_n = score_metric_asset(S[best['metric']], price_series, best['window'], best['horizon'], best['method'], date_range=test_range)
 
-        held_up = (test_corr * best['train_corr'] > 0) and is_significant(best['train_corr'], best['train_n']) and is_significant(test_corr, test_n)
+        held_up = (test_corr is not None and test_corr * best['train_corr'] > 0
+                   and is_significant(best['train_corr'], best['train_n']) and is_significant(test_corr, test_n))
         results[name] = {
             'ticker': ticker, 'status': 'ok',
             'best_metric': best['metric'], 'method': best['method'], 'window': best['window'], 'horizon': best['horizon'],
