@@ -98,10 +98,11 @@
   tbody tr.excluded{opacity:.6;}
   .scroll-hint{display:none; font-family:var(--mono); font-size:10px; color:var(--muted-dim); text-align:center; padding:6px 0 10px; letter-spacing:.03em;}
   @media(max-width:700px){
-    table{min-width:520px;}
+    table{min-width:0; table-layout:fixed;}
+    th, td{overflow-wrap:break-word; word-break:break-word;}
     .col-optional{display:none;}
-    .scroll-hint{display:block;}
-    thead th, tbody td{padding:10px 12px; font-size:12px;}
+    .col-narrow{width:76px;}
+    thead th, tbody td{padding:8px 8px; font-size:11.5px;}
   }
   .ind-name{font-weight:500;}
   .ind-cat{font-family:var(--mono); font-size:10.5px; color:var(--muted); padding:2px 8px; border:1px solid var(--hair); border-radius:20px; display:inline-block;}
@@ -206,7 +207,7 @@
       </div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Asset</th><th class="col-optional">Ticker</th><th>Likely Direction</th><th id="accuracyColHeader" style="display:none;">Backtested Hit Rate</th><th class="col-optional">Why</th></tr></thead>
+          <thead><tr><th>Asset</th><th class="col-optional">Ticker</th><th class="col-narrow">Direction</th><th id="accuracyColHeader" class="col-narrow" style="display:none;">Hit Rate</th><th>Why</th></tr></thead>
           <tbody id="assetOutlookBody"></tbody>
         </table>
       </div>
@@ -233,7 +234,7 @@
       <div class="table-scroll">
         <table>
           <thead><tr>
-            <th>Indicator</th><th class="col-optional">Category</th><th>Live Reading</th><th>Feed</th><th>Risk Score</th><th class="col-optional">Weight</th><th class="col-optional">Weighted</th>
+            <th>Indicator</th><th class="col-optional">Category</th><th>Live Reading</th><th>Feed</th><th class="col-narrow">Score</th><th class="col-optional">Weight</th><th class="col-optional">Weighted</th>
           </tr></thead>
           <tbody id="indicatorBody"><tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted-dim); font-family:var(--mono); font-size:12px;">Fetching ~27 FRED series…</td></tr></tbody>
         </table>
@@ -576,13 +577,12 @@ function renderModel(model){
     if(ind.unavailable) feedBadge=`<span class="badge na">✕ NOT ON FRED</span>`;
     else if(ind.score===null) feedBadge=`<span class="badge err">✕ FETCH FAILED</span>`;
     else feedBadge=`<span class="badge live">● LIVE</span>`;
-    const flagText = ind.flag || ind.redundant;
     tr.innerHTML=`
-      <td class="ind-name">${ind.name}${flagText?`<span class="flag">⚠ ${flagText}</span>`:''}</td>
+      <td class="ind-name">${ind.name}</td>
       <td class="col-optional"><span class="ind-cat">${ind.category}</span></td>
       <td class="mono-val">${num(ind.reading)} <span style="color:var(--muted-dim); font-size:11px;">${ind.units!=='—'?ind.units:''}</span></td>
       <td>${feedBadge}</td>
-      <td><span class="risk-chip" style="background:${c}22; color:${c}">${ind.score!==null?ind.score.toFixed(1):'—'}</span></td>
+      <td class="col-narrow"><span class="risk-chip" style="background:${c}22; color:${c}">${ind.score!==null?ind.score.toFixed(1):'—'}</span></td>
       <td class="mono-val col-optional">${(ind.weight*100).toFixed(0)}%</td>
       <td class="mono-val col-optional">${ind.weighted!==null?ind.weighted.toFixed(2):'—'}</td>
     `;
@@ -644,20 +644,20 @@ function renderAssetOutlook(outlook){
       const stat = newAssetStats[a.name];
       if(stat.hit_rate!==null){
         const hrCol = stat.hit_rate>=0.55 ? 'var(--normal)' : stat.hit_rate<0.45 ? 'var(--highrisk)' : 'var(--watch)';
-        accCell = `<td class="mono-val" style="color:${hrCol}">${(stat.hit_rate*100).toFixed(0)}% <span style="color:var(--muted-dim); font-size:10.5px;">(n=${stat.total})</span></td>`;
+        accCell = `<td class="mono-val col-narrow" style="color:${hrCol}">${(stat.hit_rate*100).toFixed(0)}% <span style="color:var(--muted-dim); font-size:10.5px;">(n=${stat.total})</span></td>`;
       } else {
-        accCell = `<td class="mono-val" style="color:var(--muted-dim)">n/a</td>`;
+        accCell = `<td class="mono-val col-narrow" style="color:var(--muted-dim)">n/a</td>`;
       }
     } else if(bt){
-      accCell = `<td class="mono-val" style="color:var(--muted-dim)">—</td>`;
+      accCell = `<td class="mono-val col-narrow" style="color:var(--muted-dim)">—</td>`;
     }
     const tr=document.createElement('tr');
     tr.innerHTML = `
       <td class="ind-name">${a.name}</td>
       <td class="mono-val col-optional" style="color:var(--muted-dim)">${a.ticker}</td>
-      <td><span class="risk-chip" style="background:${col}22; color:${col}">${a.likelyDirection||'—'}</span></td>
+      <td class="col-narrow"><span class="risk-chip" style="background:${col}22; color:${col}">${a.likelyDirection||'—'}</span></td>
       ${accCell}
-      <td class="col-optional" style="font-size:12px; color:var(--muted)">${a.interpretation}</td>
+      <td style="font-size:12px; color:var(--muted)">${a.interpretation}</td>
     `;
     body.appendChild(tr);
   });
