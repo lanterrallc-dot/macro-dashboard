@@ -913,3 +913,519 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 </script>
 </body>
 </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dollar panel</title>
+<style>
+  :root{
+    --ink:#0C1620; --panel:#13212F; --panel-2:#182B3C; --rule:#25394D;
+    --text:#DCE6F0; --muted:#7C90A4;
+    --signal:#4FD1C5; --signal-dim:#4FD1C533;
+    --up:#6FD3A8; --dn:#EE7C6A;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--ink);color:var(--text);
+    font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px 64px}
+  .masthead{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 18px;padding-bottom:6px}
+  .masthead h1{font-size:clamp(20px,2.6vw,26px);font-weight:640;letter-spacing:-0.02em;margin:0}
+  .stamp{color:var(--muted);font-size:13.5px}
+  .stamp b{color:var(--text);font-weight:560}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--signal);display:inline-block;margin-right:7px;vertical-align:1px}
+  nav{padding-bottom:16px;display:flex;gap:16px;flex-wrap:wrap}
+  nav a{color:var(--muted);font-size:13px;text-decoration:none}
+  nav a:hover{color:var(--text)}
+
+  .quad{background:var(--panel);border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+  .quad-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:18px 20px 4px}
+  .quad-head p{margin:0;color:var(--muted);font-size:13.5px;max-width:44ch}
+  .hz{display:flex;gap:0;margin-top:10px;border:1px solid var(--rule);border-radius:3px;width:max-content}
+  .hz button{background:none;border:0;color:var(--muted);font:inherit;font-size:12.5px;
+    padding:5px 12px;cursor:pointer;border-right:1px solid var(--rule)}
+  .hz button:last-child{border-right:0}
+  .hz button[aria-pressed="true"]{background:var(--panel-2);color:var(--text);font-weight:560}
+  .reading{text-align:right;line-height:1.15;flex:none}
+  .reading .st{font-size:clamp(20px,4.2vw,28px);font-weight:660;letter-spacing:-0.03em;color:var(--signal);display:block}
+  .reading .sub{font-size:13px;color:var(--muted);display:block;margin-top:4px}
+  svg.plot{display:block;width:100%;height:auto}
+  .qlab{fill:var(--muted);font-size:9.5px}
+  .qax{fill:var(--muted);font-size:10px}
+
+  .alert{margin-top:14px;border:1px solid var(--rule);border-left:3px solid var(--signal);
+    background:var(--panel-2);border-radius:3px;padding:14px 16px}
+  .alert b{display:block;font-size:14.5px;margin-bottom:4px;color:var(--signal)}
+  .alert span{font-size:13.5px;color:var(--muted);line-height:1.55}
+
+  .strip{display:flex;flex-wrap:wrap;border:1px solid var(--rule);background:var(--panel-2);margin-top:14px;border-radius:3px;overflow:hidden}
+  .strip div{flex:1 1 150px;padding:11px 14px;border-right:1px solid var(--rule)}
+  .strip div:last-child{border-right:0}
+  .strip .k{color:var(--muted);font-size:12px;display:block}
+  .strip .v{font-size:18px;font-weight:620;letter-spacing:-0.025em;display:block;margin-top:2px}
+
+  .sec-h{font-size:15px;font-weight:600;margin:30px 0 2px;letter-spacing:-0.01em}
+  .sec-p{margin:0 0 12px;color:var(--muted);font-size:13.5px;max-width:64ch}
+  .chartbox{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:14px 0 0}
+  .axis-t{fill:var(--muted);font-size:10px}
+  .zline{fill:var(--muted);font-size:9px}
+
+  table{border-collapse:collapse;width:100%;min-width:480px;font-size:14px}
+  .tablewrap{overflow-x:auto}
+  th,td{padding:9px 10px;text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left;padding-left:0}
+  th:last-child,td:last-child{padding-right:0}
+  thead th{color:var(--muted);font-weight:520;font-size:12.5px;border-bottom:1px solid var(--rule)}
+  tbody tr{border-bottom:1px solid #1C2C3C}
+  td.ccy{font-weight:580}
+  td.ccy small{color:var(--muted);font-weight:400;font-size:12px;margin-left:7px}
+  .up{color:var(--up)} .dn{color:var(--dn)}
+
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--rule);color:var(--muted);font-size:12.5px;line-height:1.6}
+  footer p{margin:0 0 9px;max-width:72ch}
+  .state{padding:44px 20px;text-align:center;color:var(--muted);font-size:14.5px}
+  .state button{margin-top:14px;background:none;border:1px solid var(--rule);color:var(--text);font:inherit;font-size:14px;padding:8px 16px;border-radius:3px;cursor:pointer}
+  :focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+  .hidden{display:none}
+  @media (max-width:560px){.quad-head{flex-direction:column;gap:10px}.reading{text-align:left}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <h1>Dollar panel</h1>
+    <div class="stamp" id="stamp"><span class="dot"></span>Loading five years of rates…</div>
+  </div>
+  <nav>
+    <a href="./">Stress dashboard</a>
+    <a href="./carry.html">Carry unwind monitor</a>
+    <a href="https://lanterrallc-dot.github.io/macro-dashboard/">Macro / liquidity</a>
+  </nav>
+
+  <div id="loading" class="state">Building the dollar index…</div>
+  <div id="failed" class="state hidden">
+    The rate feed didn't respond. It may be briefly down, or your network may be blocking it.
+    <br><button id="retry">Try again</button>
+  </div>
+
+  <main id="app" class="hidden">
+
+    <section class="quad">
+      <div class="quad-head">
+        <p>Two questions at once: is one shared factor driving every currency, and which way is the dollar going? The corner you land in matters far more than either answer alone. The trail is the last sixty days.</p>
+        <div class="reading">
+          <span class="st" id="regime">–</span>
+          <span class="sub" id="regsub"></span>
+        </div>
+      </div>
+      <div style="padding:0 20px 10px">
+        <div class="hz" role="group" aria-label="Horizon for the dollar move">
+          <button id="hz60" aria-pressed="true">60 days</button>
+          <button id="hz250" aria-pressed="false">250 days</button>
+        </div>
+      </div>
+      <svg class="plot" id="quad" viewBox="0 0 700 330" role="img" aria-label="Dollar regime quadrant"></svg>
+    </section>
+
+    <div id="alertbox"></div>
+
+    <div class="strip">
+      <div><span class="k">Dollar, 20 days</span><span class="v" id="d20">–</span></div>
+      <div><span class="k">Dollar, 60 days</span><span class="v" id="d60">–</span></div>
+      <div><span class="k">Dollar, 250 days</span><span class="v" id="d250">–</span></div>
+      <div><span class="k">One-factor dominance</span><span class="v" id="dom">–</span></div>
+      <div><span class="k">Correlation among majors</span><span class="v" id="rawc">–</span></div>
+      <div><span class="k">Haven behaviour</span><span class="v" id="haven">–</span></div>
+    </div>
+
+    <h2 class="sec-h">The dollar against the majors</h2>
+    <p class="sec-p">Equal-weighted across nine major currencies, rebased to 100 five years ago. Rising means a stronger dollar.</p>
+    <div class="chartbox"><svg class="plot" id="dxy" viewBox="0 0 700 190" preserveAspectRatio="none"></svg></div>
+
+    <h2 class="sec-h">Is the dollar still acting like a haven?</h2>
+    <p class="sec-p">Measured against everything except the dollar, do the yen and franc rise at the same times the dollar does? Both are havens, so this should sit comfortably above zero. Sustained readings below zero mean the dollar has stopped behaving like one — the single most consequential thing this page can tell you, and it is not visible in any dollar index.</p>
+    <div class="chartbox"><svg class="plot" id="hav" viewBox="0 0 700 170" preserveAspectRatio="none"></svg></div>
+
+    <h2 class="sec-h">Who is doing the moving</h2>
+    <p class="sec-p">Shown as each currency's gain against the dollar, so positive means a weaker dollar. When one factor dominates, this column looks uniform.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th scope="col">Currency</th><th scope="col">5 day</th><th scope="col">20 day</th><th scope="col">60 day</th><th scope="col">Volatility</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+
+    <footer>
+      <p><b>Why the corner matters.</b> A dollar falling while every currency moves on the same factor is a capital-flow story about American assets. The identical dominance reading with the dollar <i>rising</i> is a global risk event or a funding squeeze — the world reaching for dollars, which is the opposite diagnosis. Magnitude alone can't tell these apart, which is why the stress dashboard's unsigned dollar reading needed this companion.</p>
+      <p><b>What is missing, and it is the important half.</b> The clearest warning on US assets is the dollar falling while Treasury yields rise, meaning investors demand more compensation to hold US paper and leave regardless. That needs yield data this feed doesn't carry. Check the ten-year against the dollar line here; if they diverge that way for more than a few weeks, it outranks everything on this page.</p>
+      <p><b>Read this slowly.</b> Every measure here uses sixty-day windows deliberately. Capital reallocation happens over months, and short windows would fill the page with noise that looks like signal. A single week in a red corner is weather. A quarter is a decision being made.</p>
+      <p id="src"></p>
+    </footer>
+  </main>
+</div>
+
+<script>
+/* ============================================================
+   Configuration
+   ============================================================ */
+const MAJORS = ["EUR","JPY","GBP","CHF","CAD","AUD","NZD","SEK","NOK"];
+const HAVENS = ["JPY","CHF"];
+const REF = MAJORS.filter(c => !HAVENS.includes(c));   // the neutral yardstick
+const NAMES = {EUR:"Euro",JPY:"Japanese yen",GBP:"British pound",CHF:"Swiss franc",
+  CAD:"Canadian dollar",AUD:"Australian dollar",NZD:"New Zealand dollar",
+  SEK:"Swedish krona",NOK:"Norwegian krone"};
+const HOSTS = ["https://api.frankfurter.dev/v1","https://api.frankfurter.app"];
+const LOOKBACK_DAYS = 1830;
+const DOM_WINDOW = 60;    // window for one-factor dominance
+const HAV_WINDOW = 120;   // window for haven co-movement
+const MIN_RANK_OBS = 500;   // ~2 years before dominance is scored at all
+const REFRESH_MS = 15*60*1000;
+
+/* Thresholds for the red flag. Deliberately slow.
+   Two horizons: 60 days catches an abrupt exit, 250 days catches a gradual
+   reallocation that a short window would read as flat. */
+const DOM_HOT = 70;
+const HORIZONS = {
+  60:  { days:60,  span:8,  fall:-2.0, label:"60 days"  },
+  250: { days:250, span:20, fall:-5.0, label:"250 days" }
+};
+let HORIZON = 60;
+
+/* ============================================================
+   Analytics
+   ============================================================ */
+function stdev(a){const n=a.length;if(n<2)return 0;let m=0;for(const v of a)m+=v;m/=n;
+  let s=0;for(const v of a)s+=(v-m)*(v-m);return Math.sqrt(s/(n-1));}
+function corr(a,b){const n=Math.min(a.length,b.length);if(n<3)return 0;
+  let ma=0,mb=0;for(let i=0;i<n;i++){ma+=a[i];mb+=b[i];}ma/=n;mb/=n;
+  let sab=0,sa=0,sb=0;
+  for(let i=0;i<n;i++){const x=a[i]-ma,y=b[i]-mb;sab+=x*y;sa+=x*x;sb+=y*y;}
+  return (sa>0&&sb>0)?sab/Math.sqrt(sa*sb):0;}
+// Gain of the currency against USD. Feed is USD->CCY, so a rising rate = weaker currency.
+function appreciation(s){const o=[];for(let i=1;i<s.length;i++){const a=s[i-1],b=s[i];
+  o.push((a>0&&b>0)?-Math.log(b/a):0);}return o;}
+function percentileRank(v,h){const c=h.filter(x=>x!==null&&Number.isFinite(x));
+  if(c.length<20)return null;let n=0;for(const x of c)if(x<v)n++;return (n/c.length)*100;}
+function trailingRanks(s,w){const o=new Array(s.length).fill(null);
+  for(let i=0;i<s.length;i++){if(s[i]===null||!Number.isFinite(s[i]))continue;
+    o[i]=percentileRank(s[i],s.slice(Math.max(0,i-w),i));}return o;}
+/* Rank against ALL prior history, not a trailing year. Correlation regimes
+   can persist for months; a trailing window would quietly treat a sustained
+   one-factor market as the new normal and stop flagging it. */
+function expandingRanks(s,minObs){
+  const o=new Array(s.length).fill(null);
+  for(let i=0;i<s.length;i++){
+    if(s[i]===null||!Number.isFinite(s[i])) continue;
+    if(i<minObs) continue;
+    o[i]=percentileRank(s[i],s.slice(0,i));
+  }
+  return o;
+}
+function rollingVol(r,w){const o=new Array(r.length).fill(null);
+  for(let i=w-1;i<r.length;i++)o[i]=stdev(r.slice(i-w+1,i+1))*Math.sqrt(252)*100;return o;}
+
+/* Average pairwise correlation across the majors. High means one shared
+   factor is moving everything, which against USD means the dollar itself. */
+function dominance(appr, n, win){
+  const out=new Array(n).fill(null);
+  for(let i=win;i<n;i++){
+    const sl=MAJORS.map(c=>appr[c].slice(i-win+1,i+1));
+    let s=0,k=0;
+    for(let a=0;a<sl.length;a++)for(let b=a+1;b<sl.length;b++){s+=corr(sl[a],sl[b]);k++;}
+    out[i]=k?s/k:null;
+  }
+  return out;
+}
+
+/* Haven co-movement, measured against a yardstick that is neither the dollar
+   nor a haven — otherwise the question is circular, since everything here is
+   already quoted against the dollar. */
+function havenComovement(appr, n, win){
+  const refMean=new Array(n).fill(0);
+  for(let i=0;i<n;i++){let s=0;for(const c of REF)s+=appr[c][i];refMean[i]=s/REF.length;}
+  const usdVsRef = refMean.map(v=>-v);                       // dollar against the yardstick
+  const havVsRef = new Array(n).fill(0);
+  for(let i=0;i<n;i++){
+    let s=0;for(const c of HAVENS)s+=appr[c][i];
+    havVsRef[i]=s/HAVENS.length - refMean[i];                // yen and franc against it
+  }
+  const out=new Array(n).fill(null);
+  for(let i=win;i<n;i++)
+    out[i]=corr(usdVsRef.slice(i-win+1,i+1), havVsRef.slice(i-win+1,i+1));
+  return out;
+}
+
+function build(dates, byCcy){
+  const appr={};
+  for(const c of MAJORS) appr[c]=appreciation(byCcy[c]);
+  const n=appr[MAJORS[0]].length;
+  const retDates=dates.slice(1);
+
+  // Dollar index: equal-weighted, rising means stronger dollar.
+  const usdRet=new Array(n).fill(0);
+  for(let i=0;i<n;i++){let s=0;for(const c of MAJORS)s+=appr[c][i];usdRet[i]=-s/MAJORS.length;}
+  const dxy=new Array(n); let acc=0;
+  for(let i=0;i<n;i++){acc+=usdRet[i];dxy[i]=100*Math.exp(acc);}
+
+  const domRaw=dominance(appr,n,DOM_WINDOW);
+  const domIdx=expandingRanks(domRaw,MIN_RANK_OBS);
+  const haven=havenComovement(appr,n,HAV_WINDOW);
+
+  const chg=(i,k)=> i>=k ? (dxy[i]/dxy[i-k]-1)*100 : null;
+
+  return {retDates,n,appr,dxy,usdRet,domRaw,domIdx,haven,chg};
+}
+
+/* The four corners. Direction is what separates a diagnosis about American
+   assets from one about global risk. */
+function classify(dom, chg60, fall){
+  if(dom===null||chg60===null) return {name:"–",sub:"",color:"#7C90A4",flag:0};
+  const hot = dom>=DOM_HOT;
+  const down = chg60<0;
+  if(hot && down)  return {name:"Dollar exit", sub:"one factor, dollar falling",
+    color:"#E4574A", flag: chg60<=fall ? 2 : 1};
+  if(hot && !down) return {name:"Dollar squeeze", sub:"one factor, dollar rising",
+    color:"#E8B84B", flag:0};
+  if(down)         return {name:"Drifting weaker", sub:"no shared factor",
+    color:"#7FC7A4", flag:0};
+  return {name:"Drifting stronger", sub:"no shared factor", color:"#4FD1C5", flag:0};
+}
+
+/* ============================================================
+   Presentation
+   ============================================================ */
+const fmtDate=iso=>new Date(iso+"T00:00:00Z")
+  .toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
+const round=(v,p=0)=>v===null||!Number.isFinite(v)?"–":v.toFixed(p);
+const signed=(v,p=2)=>v===null||!Number.isFinite(v)?"–":(v>0?"+":"")+v.toFixed(p)+"%";
+
+function drawQuad(R,i,hz){
+  const svg=document.getElementById("quad");
+  const W=700,H=330,L=44,Rp=16,T=14,B=34;
+  const S=hz.span;
+  const px=v=>L+((Math.max(-S,Math.min(S,v))+S)/(2*S))*(W-L-Rp);
+  const py=v=>(H-B)-(Math.max(0,Math.min(100,v))/100)*(H-B-T);
+  let g="";
+
+  // quadrant shading — only the dangerous corner is tinted
+  g+=`<rect x="${L}" y="${py(100)}" width="${px(0)-L}" height="${py(DOM_HOT)-py(100)}" fill="#E4574A" opacity="0.09"/>`;
+  g+=`<line x1="${px(0)}" y1="${T}" x2="${px(0)}" y2="${H-B}" stroke="#3A4E62" stroke-width="1"/>`;
+  g+=`<line x1="${L}" y1="${py(DOM_HOT)}" x2="${W-Rp}" y2="${py(DOM_HOT)}" stroke="#3A4E62" stroke-width="1" stroke-dasharray="3 3"/>`;
+
+  const h=S/2;
+  const corners=[
+    [px(-h),py(85),"Dollar exit","middle"],
+    [px(h), py(85),"Dollar squeeze","middle"],
+    [px(-h),py(30),"Drifting weaker","middle"],
+    [px(h), py(30),"Drifting stronger","middle"]
+  ];
+  for(const [x,y,t,a] of corners)
+    g+=`<text class="qlab" x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="${a}">${t}</text>`;
+
+  // trail of the last 60 sessions
+  const from=Math.max(DOM_WINDOW+1,i-59);
+  for(let k=from;k<=i;k++){
+    const c60=R.chg(k,hz.days), d=R.domIdx[k];
+    if(c60===null||d===null) continue;
+    const t=(k-from)/Math.max(1,i-from);
+    g+=`<circle cx="${px(c60).toFixed(1)}" cy="${py(d).toFixed(1)}" r="${(1.4+t*1.1).toFixed(1)}" fill="var(--signal)" opacity="${(0.10+t*0.5).toFixed(2)}"/>`;
+  }
+  const c60=R.chg(i,hz.days), d=R.domIdx[i];
+  if(c60!==null&&d!==null){
+    g+=`<circle cx="${px(c60).toFixed(1)}" cy="${py(d).toFixed(1)}" r="6" fill="none" stroke="var(--signal)" stroke-width="1.4"/>`;
+    g+=`<circle cx="${px(c60).toFixed(1)}" cy="${py(d).toFixed(1)}" r="3" fill="var(--signal)"/>`;
+  }
+
+  [-S,-S/2,0,S/2,S].forEach(v=>{
+    g+=`<text class="qax" x="${px(v).toFixed(0)}" y="${H-16}" text-anchor="middle">${v>0?"+"+v:v}%</text>`;
+  });
+  g+=`<text class="qax" x="${(W/2).toFixed(0)}" y="${H-3}" text-anchor="middle">dollar, ${hz.label}</text>`;
+  [0,50,100].forEach(v=>{
+    g+=`<text class="qax" x="${L-8}" y="${(py(v)+3).toFixed(0)}" text-anchor="end">${v}</text>`;
+  });
+  g+=`<text class="qax" x="12" y="${(H/2).toFixed(0)}" text-anchor="middle" transform="rotate(-90 12 ${(H/2).toFixed(0)})">one-factor dominance</text>`;
+  svg.innerHTML=g;
+}
+
+function drawLine(id,dates,vals,opts){
+  const svg=document.getElementById(id);
+  const W=700,H=opts.h,padB=18,padT=10;
+  const pts=[];
+  for(let i=0;i<vals.length;i++) if(vals[i]!==null&&Number.isFinite(vals[i])) pts.push([i,vals[i]]);
+  if(pts.length<2){svg.innerHTML="";return;}
+  let lo=Infinity,hi=-Infinity;
+  for(const p of pts){if(p[1]<lo)lo=p[1];if(p[1]>hi)hi=p[1];}
+  if(opts.zero!==undefined){lo=Math.min(lo,opts.zero);hi=Math.max(hi,opts.zero);}
+  const pad=(hi-lo)*0.10||1; lo-=pad; hi+=pad;
+  const i0=pts[0][0],i1=pts[pts.length-1][0];
+  const x=i=>((i-i0)/(i1-i0))*W;
+  const y=v=>(H-padB)-((v-lo)/(hi-lo))*(H-padB-padT);
+  let g="";
+  if(opts.zero!==undefined){
+    g+=`<line x1="0" y1="${y(opts.zero).toFixed(1)}" x2="${W}" y2="${y(opts.zero).toFixed(1)}" stroke="#3A4E62" stroke-width="1"/>`;
+    g+=`<text class="zline" x="4" y="${(y(opts.zero)-4).toFixed(1)}">${opts.zeroLabel||"0"}</text>`;
+    // shade the region below zero, where the haven relationship has inverted
+    let neg="";
+    for(const p of pts) if(p[1]<opts.zero)
+      neg+=`<rect x="${x(p[0]).toFixed(1)}" y="${y(opts.zero).toFixed(1)}" width="${(W/pts.length+1).toFixed(1)}" height="${(y(p[1])-y(opts.zero)).toFixed(1)}" fill="#E4574A" opacity="0.16"/>`;
+    g+=neg;
+  }
+  let line=pts.map((p,k)=>(k?"L":"M")+x(p[0]).toFixed(1)+" "+y(p[1]).toFixed(1)).join(" ");
+  g+=`<path d="${line}" fill="none" stroke="var(--signal)" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+  const last=pts[pts.length-1];
+  g+=`<circle cx="${x(last[0]).toFixed(1)}" cy="${y(last[1]).toFixed(1)}" r="3.5" fill="var(--signal)"/>`;
+  [[pts[0],"start"],[pts[Math.floor(pts.length/2)],"middle"],[last,"end"]].forEach(([p,a],k)=>{
+    const pxv=k===0?2:k===2?W-2:x(p[0]);
+    g+=`<text class="axis-t" x="${pxv}" y="${H-4}" text-anchor="${a}">${fmtDate(dates[p[0]])}</text>`;
+  });
+  svg.innerHTML=g;
+}
+
+function renderAlert(cls, hav, chg60, dom, hz){
+  const box=document.getElementById("alertbox");
+  if(cls.flag===0 && !(hav!==null && hav<0)){ box.innerHTML=""; return; }
+  let title, body;
+  if(cls.flag===2){
+    title="Dollar exit pattern, sustained";
+    body=`Currencies are moving on one shared factor and the dollar has fallen ${Math.abs(chg60).toFixed(1)}% over ${hz.label}. `+
+      `That combination is a capital-flow story about US assets rather than a currency story. `+
+      `Confirm it against the ten-year Treasury yield: if yields are rising while this line falls, investors are demanding more to hold US paper and leaving anyway.`;
+  } else if(cls.flag===1){
+    title="Dollar exit pattern, early";
+    body=`One factor is driving the majors and the dollar is drifting down, but the ${hz.label} move is still under ${Math.abs(hz.fall)}%. `+
+      `Worth watching rather than acting on. This becomes meaningful if it persists for another few weeks.`;
+  } else {
+    title="Haven behaviour has inverted";
+    body=`The dollar is no longer rising alongside the yen and franc when markets take fright. `+
+      `The quadrant is calm, so this is not an unwind — but it undermines the assumption that dollar exposure hedges a risk-off event.`;
+  }
+  if(hav!==null && hav<0 && cls.flag>0)
+    body+=` Haven co-movement is also negative at ${hav.toFixed(2)}, so the dollar is not offsetting risk the way it normally would.`;
+  box.innerHTML=`<div class="alert"><b>${title}</b><span>${body}</span></div>`;
+}
+
+/* ============================================================
+   Data
+   ============================================================ */
+async function fetchWindow(){
+  const end=new Date(),start=new Date(end.getTime()-LOOKBACK_DAYS*86400000);
+  const iso=d=>d.toISOString().slice(0,10);
+  const qs=`${iso(start)}..${iso(end)}?base=USD&symbols=${MAJORS.join(",")}`;
+  let err;
+  for(const h of HOSTS){
+    try{
+      const res=await fetch(`${h}/${qs}`,{cache:"no-store"});
+      if(!res.ok) throw new Error(res.status);
+      const j=await res.json();
+      if(j&&j.rates&&Object.keys(j.rates).length>300) return j;
+      throw new Error("short series");
+    }catch(e){err=e;}
+  }
+  throw err;
+}
+function shape(raw){
+  const dates=Object.keys(raw.rates).sort();
+  const byCcy={};
+  for(const c of MAJORS){
+    const arr=[];
+    for(const d of dates){
+      const v=raw.rates[d][c];
+      if(v===undefined||v===null||!(v>0)) arr.push(arr.length?arr[arr.length-1]:null);
+      else arr.push(v);
+    }
+    byCcy[c]=arr[0]===null?null:arr;
+  }
+  const missing=MAJORS.filter(c=>!byCcy[c]);
+  return {dates,byCcy,missing};
+}
+
+let CURRENT=null;   // last built result, so the toggle needn't refetch
+
+function redraw(){
+  if(!CURRENT) return;
+  const {R,dates}=CURRENT, i=R.n-1, hz=HORIZONS[HORIZON];
+  const chg=R.chg(i,hz.days), dom=R.domIdx[i], hav=R.haven[i];
+  const cls=classify(dom,chg,hz.fall);
+
+  document.documentElement.style.setProperty("--signal",cls.color);
+  document.documentElement.style.setProperty("--signal-dim",cls.color+"33");
+  document.getElementById("regime").textContent=cls.name;
+  document.getElementById("regsub").textContent=cls.sub;
+  document.getElementById("hz60").setAttribute("aria-pressed",HORIZON===60);
+  document.getElementById("hz250").setAttribute("aria-pressed",HORIZON===250);
+
+  drawQuad(R,i,hz);
+  renderAlert(cls,hav,chg,dom,hz);
+}
+
+function paint(raw){
+  const {dates,byCcy,missing}=shape(raw);
+  if(missing.length) throw new Error("missing "+missing.join(","));
+  const R=build(dates,byCcy);
+  const i=R.n-1;
+  CURRENT={R,dates};
+
+  const chg20=R.chg(i,20), chg60=R.chg(i,60), chg250=R.chg(i,250);
+  const dom=R.domIdx[i], hav=R.haven[i];
+
+  document.getElementById("stamp").innerHTML=
+    `<span class="dot"></span>Rates for <b>${fmtDate(R.retDates[i])}</b> · checked `+
+    new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+
+  const set=(id,txt,cn)=>{const e=document.getElementById(id);e.textContent=txt;e.className="v "+(cn||"");};
+  set("d20",signed(chg20),chg20>=0?"up":"dn");
+  set("d60",signed(chg60),chg60>=0?"up":"dn");
+  set("d250",signed(chg250),chg250>=0?"up":"dn");
+  set("dom",round(dom),dom>=DOM_HOT?"dn":"");
+  set("rawc",R.domRaw[i]===null?"–":R.domRaw[i].toFixed(2));
+  set("haven",hav===null?"–":hav.toFixed(2),hav<0?"dn":"up");
+
+  redraw();
+  drawLine("dxy",R.retDates,R.dxy,{h:190});
+  drawLine("hav",R.retDates,R.haven,{h:170,zero:0,zeroLabel:"no relationship"});
+
+  document.getElementById("rows").innerHTML=MAJORS.map(c=>{
+    const a=R.appr[c];
+    const cum=k=>{let s=0;for(let j=0;j<k;j++)s+=a[i-j]||0;return (Math.exp(s)-1)*100;};
+    const cell=v=>`<td class="${v>0?"up":v<0?"dn":""}">${signed(v)}</td>`;
+    return `<tr><td class="ccy">${c}<small>${NAMES[c]}</small></td>
+      ${cell(cum(5))}${cell(cum(20))}${cell(cum(60))}
+      <td>${round(rollingVol(a,20)[i],1)}%</td></tr>`;
+  }).join("");
+
+  document.getElementById("src").textContent=
+    `${MAJORS.length} majors · ${dates.length} business days · ECB reference rates via Frankfurter · `+
+    `raw average pairwise correlation ${R.domRaw[i]===null?"–":R.domRaw[i].toFixed(2)}, `+
+    `ranked against all ${dates.length} sessions on record.`;
+
+  document.getElementById("loading").classList.add("hidden");
+  document.getElementById("failed").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+}
+
+async function load(){
+  try{ paint(await fetchWindow()); }
+  catch(e){
+    console.error(e);
+    if(document.getElementById("app").classList.contains("hidden")){
+      document.getElementById("loading").classList.add("hidden");
+      document.getElementById("failed").classList.remove("hidden");
+    }
+    document.getElementById("stamp").innerHTML=`<span class="dot"></span>Feed unreachable`;
+  }
+}
+document.getElementById("hz60").addEventListener("click",()=>{HORIZON=60;redraw();});
+document.getElementById("hz250").addEventListener("click",()=>{HORIZON=250;redraw();});
+document.getElementById("retry").addEventListener("click",()=>{
+  document.getElementById("failed").classList.add("hidden");
+  document.getElementById("loading").classList.remove("hidden");
+  load();
+});
+load();
+setInterval(load,REFRESH_MS);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)load();});
+</script>
+</body>
+</html>
