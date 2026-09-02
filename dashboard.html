@@ -408,7 +408,26 @@ function computeModel(S){
   const jpyScore=fxLeg('DEXJPUS',true), eurScore=fxLeg('DEXUSEU',true), cnyScore=fxLeg('DEXCHUS',false),
         chfScore=fxLeg('DEXSZUS',true), audScore=fxLeg('DEXUSAL',true), dxyFxScore=fxLeg('DTWEXBGS',false);
   const fxLegs=[jpyScore,eurScore,cnyScore,chfScore,audScore,dxyFxScore];
-  const fxStress = fxLegs.some(v=>v===null) ? null : 0.3*jpyScore+0.15*eurScore+0.2*cnyScore+0.1*chfScore+0.1*audScore+0.15*dxyFxScore;
+
+  // RESCALED. Each leg is built as 50 + momentum, so a market where nothing
+  // moved scores exactly 50, and only readings ABOVE 50 mean movement in the
+  // stress direction. Averaging the raw legs therefore parked the composite at
+  // ~50 whenever FX was calm — which the shared 0-100 risk colour ramp painted
+  // orange as "Elevated", and which left the regime thresholds unreachable
+  // (hitting 70 needed ~2.7% per day across all six currencies, sustained).
+  //
+  // Instead: take each leg's EXCESS over 50, so a quiet market scores 0 and
+  // legs moving the benign way contribute nothing rather than masking a leg
+  // that is genuinely stressed. Then scale onto the same 0-100 axis the rest
+  // of the dashboard uses. Raise FX_GAIN to make the reading more sensitive.
+  const FX_WEIGHTS = {jpy:.30, eur:.15, cny:.20, chf:.10, aud:.10, dxy:.15};
+  const FX_GAIN = 5;              // ~1.4%/day across all six sustained -> ~50
+  const fxExcess = v => Math.max(0, v - 50);
+  const fxStress = fxLegs.some(v=>v===null) ? null : clamp(FX_GAIN * (
+      FX_WEIGHTS.jpy*fxExcess(jpyScore) + FX_WEIGHTS.eur*fxExcess(eurScore) +
+      FX_WEIGHTS.cny*fxExcess(cnyScore) + FX_WEIGHTS.chf*fxExcess(chfScore) +
+      FX_WEIGHTS.aud*fxExcess(audScore) + FX_WEIGHTS.dxy*fxExcess(dxyFxScore)
+    ), 0, 100);
 
   // Weighting matches refresh_model.py exactly — see that file's comments for
   // the full rationale (redundancy removal, Credit reweight, unit fix, and
@@ -455,14 +474,19 @@ function computeModel(S){
   const inflationaryPressure = (categoryScores['Rates']!==null&&fedExpScore!==null&&dxyScore!==null)
     ? clamp(0.45*categoryScores['Rates']+0.3*fedExpScore+0.25*dxyScore,0,100) : null;
 
+  // FX thresholds rebased for the rescaled composite above. The old values
+  // (45/55/65/70) were written for a scale centred on 50; on a scale where
+  // calm is 0 they would mean "never trigger" and "always calm" respectively.
+  const FX_CRISIS = 55, FX_STRESS = 50, FX_CONTAINED = 35, FX_CALM = 20;
+
   let regime='Insufficient data';
   const B5=categoryScores['Liquidity'], B6=categoryScores['Credit'], B7=categoryScores['Rates'], K8=inflationaryPressure, K10=fxStress;
   if([B5,B6,B7,K8,K10].every(v=>v!==null)){
-    if(B5>=60 && B6>=60 && (B7<60 || K10>=70)) regime='Deflationary / Funding Crisis';
+    if(B5>=60 && B6>=60 && (B7<60 || K10>=FX_CRISIS)) regime='Deflationary / Funding Crisis';
     else if(B5>=55 && B7>=60 && K8>=60) regime='Inflationary Tightening';
-    else if((B5>=55||B6>=55) && K10>=65) regime='Funding / Credit Stress';
-    else if(B5<=30 && K10<45) regime='Liquidity Expansion';
-    else if(B5<50 && K10<55) regime='Neutral / Balanced';
+    else if((B5>=55||B6>=55) && K10>=FX_STRESS) regime='Funding / Credit Stress';
+    else if(B5<=30 && K10<FX_CALM) regime='Liquidity Expansion';
+    else if(B5<50 && K10<FX_CONTAINED) regime='Neutral / Balanced';
     else regime='General Tightening';
   }
 
@@ -582,7 +606,7 @@ function renderModel(model){
   grid.appendChild(ip);
   const fx=document.createElement('div'); fx.className='subscore'; fx.style.position='relative';
   const fxc = model.fxStress!==null ? riskColor(model.fxStress) : 'var(--muted-dim)';
-  fx.innerHTML=`<div class="k">FX Stress (corrected)</div><div class="v" style="color:${fxc}">${model.fxStress!==null?model.fxStress.toFixed(1):'—'}</div><div class="s">JPY/EUR/CNY/CHF/AUD/DXY composite</div>`;
+  fx.innerHTML=`<div class="k">FX Stress</div><div class="v" style="color:${fxc}">${model.fxStress!==null?model.fxStress.toFixed(1):'—'}</div><div class="s">JPY/EUR/CNY/CHF/AUD/DXY · 0 means no stress-direction movement</div>`;
   grid.appendChild(fx);
 
   const all=model.indicators;
