@@ -95,6 +95,14 @@
   .chart-legend-row i{width:14px; height:3px; border-radius:2px; display:inline-block;}
   .chart-container{height:320px; position:relative;}
 
+  /* --- dollar direction panel --- */
+  .usd-verdict{font-family:var(--display); font-size:23px; font-weight:600; line-height:1.25; margin-bottom:4px;}
+  .usd-verdict-sub{font-size:12.5px; color:var(--muted); line-height:1.6; max-width:62ch; margin-bottom:18px;}
+  .usd-spark{height:150px; position:relative; margin-top:18px;}
+  .usd-bar{position:relative; height:5px; width:100%; min-width:54px; background:var(--hair-soft); border-radius:3px; margin-top:5px;}
+  .usd-bar i{position:absolute; left:0; top:0; bottom:0; border-radius:3px; display:block;}
+  .usd-strength{font-family:var(--mono); font-size:10.5px; color:var(--muted-dim);}
+
   .table-card{background:var(--panel); border:1px solid var(--hair); border-radius:16px; overflow:hidden;}
   .table-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch;}
   table{width:100%; border-collapse:collapse; min-width:640px;}
@@ -238,6 +246,40 @@
         <span><i style="background:#e8b93f"></i>Overall Risk Score</span>
       </div>
       <div class="chart-container"><canvas id="trendChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section" id="usdFlowSection">
+    <div class="section-head">
+      <h2>Where the dollar is going, and what's going with it</h2>
+      <div class="sub" id="usdFlowSub">—</div>
+    </div>
+    <div class="chart-card">
+      <div id="usdFlowFallback" class="disclaimer" style="display:none; margin-top:0; margin-bottom:14px;"></div>
+      <div id="usdFlowContent">
+        <div class="usd-verdict" id="usdVerdict">—</div>
+        <div class="usd-verdict-sub" id="usdVerdictSub"></div>
+        <div class="subscore-grid" id="usdImpulseGrid"></div>
+        <div class="chart-legend-row" style="margin-top:20px; margin-bottom:8px;">
+          <span><i style="background:#e8b93f"></i>1-month dollar move, scored against its own 3-year history</span>
+          <span><i style="background:#5b6576"></i>zero — an average month</span>
+        </div>
+        <div class="usd-spark"><canvas id="usdImpulseCanvas"></canvas></div>
+        <div class="table-scroll" style="margin-top:22px;">
+          <table>
+            <thead><tr>
+              <th>Asset</th>
+              <th class="col-optional">Ticker</th>
+              <th>Per 1% dollar move</th>
+              <th>How tightly it tracks</th>
+              <th class="col-optional">Its own move</th>
+            </tr></thead>
+            <tbody id="usdFlowBody"></tbody>
+          </table>
+        </div>
+        <div class="scroll-hint">← swipe to see more →</div>
+        <p id="usdFlowNote" style="font-size:11.5px; color:var(--muted-dim); margin-top:14px; line-height:1.55;"></p>
+      </div>
     </div>
   </div>
 
@@ -608,7 +650,12 @@ function computeModel(S){
   });
 
   return {indicators, overallRisk, effectiveWeight, categoryScores, inflationaryPressure, fxStress, regime, notes,
-    rawSeries, assetOutlook: buildAssetOutlook(regime)};
+    rawSeries, assetOutlook: buildAssetOutlook(regime),
+    // The dollar-sensitivity panel needs 22 tickers' daily price history and
+    // three years of same-horizon dollar moves — not something to fetch and
+    // regress in the browser, so this path leaves it null and the section
+    // explains why.
+    usdFlow: null};
 }
 
 /* ============ asset-class outlook (from workbook "Asset Outlook" sheet) ============ */
@@ -684,6 +731,120 @@ function renderTrendChart(){
       y:{position:'left', grid:{color:'#1a212c'}, ticks:{color:'#5b8def', font:{family:'JetBrains Mono', size:10}}},
       y1:{position:'right', grid:{display:false}, ticks:{color:'#e8b93f', font:{family:'JetBrains Mono', size:10}}, min:0, max:100}
     }}});
+}
+
+/* ============ dollar direction / asset sensitivity ============ */
+// Computed server-side by refresh_model.py's compute_usd_flow(). Nothing is
+// recalculated here — this only renders what the feed already worked out.
+let usdImpulseChartInstance = null;
+
+// How much of an asset's day-to-day variation the dollar accounts for. These
+// cut-offs are descriptive, not statistical: r2 above about 0.4 on daily data
+// is a genuinely dollar-driven asset, and below 0.05 the beta is noise dressed
+// up as a number, which is the normal state of affairs for US equities.
+function usdStrengthLabel(r2){
+  if(r2===null||r2===undefined) return ['no reliable relationship','var(--muted-dim)'];
+  if(r2>=0.40) return ['closely tied to the dollar','var(--live)'];
+  if(r2>=0.15) return ['partly tied to the dollar','var(--watch)'];
+  if(r2>=0.05) return ['loosely tied to the dollar','var(--muted)'];
+  return ['barely tracking the dollar','var(--muted-dim)'];
+}
+
+function renderUsdFlow(uf){
+  const sub = document.getElementById('usdFlowSub');
+  const fallback = document.getElementById('usdFlowFallback');
+  const content = document.getElementById('usdFlowContent');
+
+  if(usdImpulseChartInstance){ usdImpulseChartInstance.destroy(); usdImpulseChartInstance = null; }
+
+  if(!uf || !uf.assets || !uf.assets.length){
+    sub.textContent = 'REQUIRES THE SERVER-REFRESHED FEED';
+    content.style.display = 'none';
+    fallback.style.display = '';
+    fallback.innerHTML = `<b>Not available in fallback mode.</b> This panel regresses 10 assets' daily returns on the dollar's and scores the dollar's move against three years of its own history — computed server-side by <code style="background:var(--panel); padding:1px 5px; border-radius:4px; color:var(--live);">refresh_model.py</code>. Once the scheduled refresh writes a <code style="background:var(--panel); padding:1px 5px; border-radius:4px; color:var(--live);">usd_flow</code> block into model_output.json, this populates automatically.`;
+    return;
+  }
+
+  fallback.style.display = 'none';
+  content.style.display = '';
+  sub.textContent = `BROAD DOLLAR AS OF ${uf.as_of} · ${uf.window}-SESSION REGRESSIONS`;
+
+  const pct = v => (v===null||v===undefined) ? '—' : (v>0?'+':'') + v.toFixed(2) + '%';
+
+  // Colour follows what the move means for global liquidity, not whether the
+  // number is up or down: a bid dollar tightens conditions everywhere.
+  const verdictColor = uf.z_1m===null||uf.z_1m===undefined ? 'var(--muted-dim)'
+    : uf.z_1m >= 0.75 ? 'var(--elevated)'
+    : uf.z_1m <= -0.75 ? 'var(--normal)' : 'var(--muted)';
+  const vEl = document.getElementById('usdVerdict');
+  vEl.textContent = uf.direction;
+  vEl.style.color = verdictColor;
+  document.getElementById('usdVerdictSub').textContent =
+    'Nobody publishes daily dollar flow data, so this reads direction instead: how far the broad dollar has moved, ' +
+    'and which assets have been moving with it. The dollar index below is a Fed weekly release, so it usually trails ' +
+    'the ECB spot rates on the FX pages by a few business days.';
+
+  const grid = document.getElementById('usdImpulseGrid'); grid.innerHTML = '';
+  const cards = [
+    ['1-month move', pct(uf.chg_1m_pct), uf.z_1m===null?'—':`${uf.z_1m>0?'+':''}${uf.z_1m.toFixed(2)} SD vs its own history`],
+    ['3-month move', pct(uf.chg_3m_pct), uf.z_3m===null?'—':`${uf.z_3m>0?'+':''}${uf.z_3m.toFixed(2)} SD vs its own history`],
+    ['Index level', uf.index_level===null?'—':uf.index_level.toFixed(2), `DTWEXBGS, as of ${uf.as_of}`],
+    [`Move over ${uf.window} sessions`, pct(uf.usd_window_move_pct), 'the move the betas below are measured against'],
+  ];
+  cards.forEach(([k,v,s])=>{
+    const div=document.createElement('div'); div.className='subscore';
+    div.innerHTML=`<div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div>`;
+    grid.appendChild(div);
+  });
+
+  const hist = uf.impulse_history || [];
+  if(hist.length > 1){
+    const ctx = document.getElementById('usdImpulseCanvas').getContext('2d');
+    usdImpulseChartInstance = new Chart(ctx, {
+      type:'line',
+      data:{ labels: hist.map(p=>p.date), datasets:[
+        {label:'1-month move (SD)', data:hist.map(p=>p.z), borderColor:'#e8b93f',
+         backgroundColor:'rgba(232,185,63,0.07)', borderWidth:1.8, pointRadius:0, tension:.2, fill:true},
+        {label:'zero', data:hist.map(()=>0), borderColor:'#5b6576', borderWidth:1,
+         borderDash:[4,4], pointRadius:0, fill:false},
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+        plugins:{ legend:{display:false},
+          tooltip:{ backgroundColor:'#151b26', borderColor:'#232b38', borderWidth:1,
+            titleColor:'#e7ecf3', bodyColor:'#8b96a8',
+            titleFont:{family:'JetBrains Mono', size:10}, bodyFont:{family:'JetBrains Mono', size:10}, padding:8,
+            filter: item => item.datasetIndex === 0,
+            callbacks:{ label: c => `${c.parsed.y>0?'+':''}${c.parsed.y.toFixed(2)} SD` } } },
+        scales:{
+          x:{type:'category', grid:{display:false}, ticks:{color:'#5b6576', font:{family:'JetBrains Mono', size:9}, maxTicksLimit:5, autoSkip:true}},
+          y:{grid:{color:'#1a212c'}, ticks:{color:'#e8b93f', font:{family:'JetBrains Mono', size:9}, maxTicksLimit:5}},
+        } },
+    });
+  }
+
+  const body = document.getElementById('usdFlowBody'); body.innerHTML='';
+  uf.assets.forEach(a=>{
+    const [label, labelCol] = usdStrengthLabel(a.r2);
+    // Bar length is r2 on a 0–0.5 scale — half the daily variation explained
+    // is already an unusually tight relationship, so 0.5 fills the bar.
+    const fill = clamp((a.r2||0)/0.5, 0, 1) * 100;
+    const moveWord = a.beta < 0 ? 'falls' : 'rises';
+    const betaCol = a.beta < 0 ? 'var(--elevated)' : 'var(--live)';
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td class="ind-name">${a.name}</td>
+      <td class="mono-val col-optional" style="color:var(--muted-dim)">${a.ticker}</td>
+      <td class="mono-val" style="color:${betaCol}">${moveWord} ${Math.abs(a.beta).toFixed(2)}%</td>
+      <td>
+        <div class="usd-strength" style="color:${labelCol}">${label} <span style="color:var(--muted-dim)">· r²&nbsp;${a.r2.toFixed(2)}</span></div>
+        <div class="usd-bar"><i style="width:${fill.toFixed(1)}%; background:${labelCol}"></i></div>
+      </td>
+      <td class="mono-val col-optional" style="color:var(--muted)">${pct(a.own_move_pct)} <span style="color:var(--muted-dim); font-size:10.5px;">(n=${a.n})</span></td>
+    `;
+    body.appendChild(tr);
+  });
+
+  document.getElementById('usdFlowNote').textContent = uf.note || '';
 }
 
 /* ============ render model output ============ */
@@ -785,6 +946,7 @@ function renderModel(model){
   const liveCount = all.filter(i=>!i.unavailable && i.score!==null).length;
   document.getElementById('indicatorSub').textContent = `${liveCount}/${all.length} INDICATORS LIVE · ${all.length-liveCount} UNAVAILABLE OR FAILED · 3 shown greyed-out (redundant, 0% weight)`;
 
+  renderUsdFlow(model.usdFlow);
   renderAssetOutlook(model.assetOutlook);
   renderAssetCharts(model);
 }
@@ -1057,6 +1219,9 @@ function adaptJsonModel(json){
     assetRiskMap: json.asset_risk_map || null,
     priceHistoryNote: json.price_history_note || null,
     rawSeries: json.raw_series || null,
+    // null on an older model_output.json written before compute_usd_flow()
+    // existed — the panel handles that case rather than throwing.
+    usdFlow: json.usd_flow || null,
   };
 }
 
