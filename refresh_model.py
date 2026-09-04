@@ -18,6 +18,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 FRED_API_KEY = os.environ.get('FRED_API_KEY', '').strip()
@@ -829,6 +830,295 @@ def build_asset_outlook(regime):
     }
 
 
+# --- CFTC speculative positioning ------------------------------------------
+# Why this section exists: every other FX input in this file is backward-
+# looking by construction. fx_composite() measures moves that have already
+# happened and ranks them against moves that already happened; nothing in it
+# can lead anything.
+#
+# Positioning is the one genuinely forward-looking FX input available for
+# free. It does not predict WHETHER an unwind happens — nothing cheap does —
+# but crowded speculative positioning has a real multi-week lead on how
+# VIOLENT one is when it comes, because a crowded trade has more forced
+# sellers stacked behind the same exit.
+#
+# The honest framing, which the dashboard should repeat: this is a stock,
+# not a flow, it covers only large reportable traders, and it is three days
+# stale the moment it lands. Reports publish Friday afternoon describing
+# positions as of the preceding Tuesday.
+#
+# NOTE: this is deliberately NOT folded into fx_stress. That series is daily
+# and covers six currencies; mixing a stale weekly seven-contract measure
+# into it would change what the whole existing history means.
+COT_ENDPOINT = 'https://publicreporting.cftc.gov/resource/6dca-aqww.json'
+
+# code: (short label, display name, weight)
+#
+# Weights are a judgement call, not a calibration, unlike the windows in
+# sensitivity_calibration.json — the dashboard should say so. The reasoning:
+# JPY carries the most because it is the funding leg of the dominant carry
+# trade, and a crowded short yen is the position that unwinds violently. MXN
+# is the classic high-yield destination leg. CNY has no CME contract and is
+# absent, which is a real gap given its 20% weight in FX_WEIGHTS above.
+COT_CONTRACTS = {
+    '097741': ('JPY', 'Japanese yen', .30),
+    '099741': ('EUR', 'Euro FX', .20),
+    '232741': ('AUD', 'Australian dollar', .15),
+    '092741': ('CHF', 'Swiss franc', .10),
+    '096742': ('GBP', 'British pound', .10),
+    '090741': ('CAD', 'Canadian dollar', .08),
+    '095741': ('MXN', 'Mexican peso', .07),
+}
+
+COT_ROW_LIMIT = 5000   # ~4 years x 7 contracts, with headroom
+COT_WINDOW = 156       # ~3 years of WEEKLY prints (not daily, unlike elsewhere)
+COT_MIN_OBS = 30
+
+# Socrata column names, most likely first. The dataset has been through
+# schema revisions, and a hard-coded field name that silently returns None
+# is worse than a loud failure, so each value is looked up through a list of
+# candidates and the resolved names are reported in the output.
+COT_FIELD_CANDIDATES = {
+    'date': ['report_date_as_yyyy_mm_dd', 'report_date_as_yyyy', 'report_date'],
+    'code': ['cftc_contract_market_code'],
+    'long': ['noncomm_positions_long_all', 'noncomm_positions_long'],
+    'short': ['noncomm_positions_short_all', 'noncomm_positions_short'],
+    'oi': ['open_interest_all', 'open_interest'],
+}
+
+
+def _cot_resolve_fields(row):
+    """Maps our logical field names onto whatever the API actually returned.
+    Returns (None, key) if a required field is missing, so the caller can
+    report a schema change rather than emitting a panel full of nulls."""
+    resolved = {}
+    for key, candidates in COT_FIELD_CANDIDATES.items():
+        found = next((c for c in candidates if c in row), None)
+        if found is None:
+            return None, key
+        resolved[key] = found
+    return resolved, None
+
+
+def _cot_num(v):
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def fetch_cot():
+    """Pulls the FX contracts' recent history in a single request.
+
+    Contracts are matched on CFTC market code, not name: the
+    `market_and_exchange_names` strings have been revised over the years
+    ("BRITISH POUND STERLING" -> "BRITISH POUND"); the codes have not.
+
+    Returns ({code: [{'date','net','oi','net_pct'}, ...]}, resolved_fields),
+    each series sorted ascending by date to match the shape the rest of this
+    file already uses, so percentile_score() consumes it unchanged."""
+    codes = "','".join(sorted(COT_CONTRACTS))
+    params = {
+        '$where': f"cftc_contract_market_code in('{codes}')",
+        '$order': 'report_date_as_yyyy_mm_dd DESC',
+        '$limit': str(COT_ROW_LIMIT),
+    }
+    url = COT_ENDPOINT + '?' + urllib.parse.urlencode(params)
+
+    try:
+        text = http_get(url, timeout=40)
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        print(f'  WARN: CFTC COT fetch failed: {e}', file=sys.stderr)
+        return {}, None
+
+    try:
+        rows = json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f'  WARN: CFTC COT returned unparseable JSON: {e}', file=sys.stderr)
+        return {}, None
+
+    if not rows:
+        print('  WARN: CFTC COT returned no rows', file=sys.stderr)
+        return {}, None
+
+    fields, missing = _cot_resolve_fields(rows[0])
+    if fields is None:
+        print(f'  WARN: CFTC COT schema changed \u2014 no column found for "{missing}". '
+              f'Available: {sorted(rows[0].keys())}', file=sys.stderr)
+        return {}, None
+
+    out = {}
+    for row in rows:
+        code = row.get(fields['code'])
+        if code not in COT_CONTRACTS:
+            continue
+        date = row.get(fields['date'])
+        lng = _cot_num(row.get(fields['long']))
+        sht = _cot_num(row.get(fields['short']))
+        oi = _cot_num(row.get(fields['oi']))
+        if None in (lng, sht, oi) or not date or not oi:
+            continue
+        net = lng - sht
+        out.setdefault(code, []).append({
+            'date': str(date)[:10],
+            'net': net,
+            'oi': oi,
+            # Net speculative position as a share of total open interest.
+            # Raw contract counts are NOT comparable across time — open
+            # interest in these contracts has grown several-fold — so an
+            # unscaled net position drifts upward forever and every recent
+            # week looks like a record. This is the scale-free quantity
+            # everything downstream ranks.
+            'net_pct': net / oi * 100,
+        })
+
+    for code in out:
+        out[code].sort(key=lambda p: p['date'])
+
+    return out, fields
+
+
+def compute_cot_positioning():
+    """Per-currency crowding plus a weighted composite.
+
+    Crowding ranks the ABSOLUTE net position: a heavily net-short yen and a
+    heavily net-long yen are both crowded, and both carry unwind risk, just
+    in opposite directions. The signed rank is kept alongside so the
+    direction is never lost.
+
+    Returns None on any failure, so the dashboard hides the panel rather
+    than rendering a grid of dashes — same convention as compute_usd_flow().
+    """
+    data, fields = fetch_cot()
+    if not data:
+        return None
+
+    contracts = []
+    for code, (label, name, weight) in sorted(COT_CONTRACTS.items(), key=lambda kv: -kv[1][2]):
+        series = data.get(code) or []
+        if len(series) < COT_MIN_OBS:
+            continue
+
+        current_pct = series[-1]['net_pct']
+
+        abs_series = [{'date': p['date'], 'value': abs(p['net_pct'])} for p in series]
+        crowding = percentile_score(abs(current_pct), abs_series, window=COT_WINDOW)
+
+        signed_series = [{'date': p['date'], 'value': p['net_pct']} for p in series]
+        signed_rank = percentile_score(current_pct, signed_series, window=COT_WINDOW)
+
+        pool = [abs(p['net_pct']) for p in series][-COT_WINDOW:]
+        steps = []
+        if crowding is not None:
+            below = sum(1 for v in pool if v < abs(current_pct))
+            steps = [
+                f'net speculative position = {series[-1]["net"]:,.0f} contracts',
+                f'open interest = {series[-1]["oi"]:,.0f} contracts',
+                f'net as share of OI = {current_pct:+.2f}%',
+                f'pool = last {len(pool)} weekly readings of |net share|, '
+                f'ranging {min(pool):.2f}% to {max(pool):.2f}%',
+                f'{below} of {len(pool)} were smaller \u2192 crowding {crowding:.2f}',
+            ]
+
+        contracts.append({
+            'label': label,
+            'name': name,
+            'code': code,
+            'weight': weight,
+            'as_of': series[-1]['date'],
+            'net_contracts': round(series[-1]['net']),
+            'open_interest': round(series[-1]['oi']),
+            'net_pct_of_oi': round(current_pct, 2),
+            'side': 'net long' if current_pct > 0 else 'net short',
+            'crowding': crowding,
+            'signed_rank': signed_rank,
+            'obs': len(series),
+            'steps': steps,
+        })
+
+    scored = [c for c in contracts if c['crowding'] is not None]
+    if not scored:
+        return None
+
+    wsum = sum(c['weight'] for c in scored)
+    composite = sum(c['crowding'] * c['weight'] for c in scored) / wsum if wsum else None
+
+    # Composite history, so this can be charted beside the FX stress line
+    # rather than shown only as a single current number. Each week is ranked
+    # against only what was known by that week — no lookahead, same rule the
+    # score_all_asof() reconstruction follows.
+    history = []
+    all_dates = sorted({p['date'] for s in data.values() for p in s})
+    for d in all_dates[-104:]:
+        parts, w = 0.0, 0.0
+        for code, (label, name, weight) in COT_CONTRACTS.items():
+            series = data.get(code) or []
+            upto = [p for p in series if p['date'] <= d]
+            if len(upto) < COT_MIN_OBS:
+                continue
+            abs_series = [{'date': p['date'], 'value': abs(p['net_pct'])} for p in upto]
+            sc = percentile_score(abs(upto[-1]['net_pct']), abs_series,
+                                  asof_date=d, window=COT_WINDOW)
+            if sc is None:
+                continue
+            parts += sc * weight
+            w += weight
+        if w > 0:
+            history.append({'date': d, 'crowding': round(parts / w, 2)})
+
+    return {
+        'as_of': max((c['as_of'] for c in scored), default=None),
+        'composite_crowding': round(composite, 2) if composite is not None else None,
+        'contracts': contracts,
+        'history': history,
+        'coverage': round(wsum, 3),
+        'resolved_fields': fields,
+        'note': ('Large speculative (non-commercial) net positions from the CFTC Legacy '
+                 'futures-only report, scaled by open interest and ranked against each '
+                 'contract\u2019s own three-year history. Published Friday afternoon for the '
+                 'preceding Tuesday, so the newest reading is always at least three days '
+                 'old. Crowded positioning does not predict whether a move happens \u2014 it '
+                 'indicates how much forced selling is stacked behind one if it does. '
+                 'Deliberately kept out of the FX Stress composite: that series is daily '
+                 'and six-currency, and mixing a stale weekly measure into it would change '
+                 'what its whole history means. CNY is absent \u2014 there is no CME contract, '
+                 'a real gap given its 20% weight in FX Stress. Contract weights here are '
+                 'a judgement call, not a calibrated result.'),
+    }
+
+
+def cot_quadrant(fx_stress, crowding):
+    """Reads the two FX measures together instead of averaging them, because
+    they answer different questions: fx_stress says what the market has been
+    doing, crowding says how much fuel sits behind a move if one starts.
+
+    Gates at 50 on both axes. Returns None if either leg is missing."""
+    if fx_stress is None or crowding is None:
+        return None
+    hot_r, hot_c = fx_stress >= FX_STRESS_GATE, crowding >= 50
+    if hot_r and hot_c:
+        return {'name': 'Moving, and crowded',
+                'body': ('FX conditions are already stressed and speculators are leaning hard at '
+                         'the same time. The configuration where moves tend to extend rather than '
+                         'fade, because the people who need to exit all face the same direction. '
+                         'Says nothing about which way.')}
+    if hot_r and not hot_c:
+        return {'name': 'Moving, but positions are light',
+                'body': ('Currencies are moving unusually while speculators are not heavily '
+                         'committed. Less forced selling stacked behind a move, so dislocations '
+                         'have historically been shorter-lived than they look in the moment.')}
+    if not hot_r and hot_c:
+        return {'name': 'Quiet, but crowded',
+                'body': ('Little happening in spot while speculators lean heavily. Historically '
+                         'the least comfortable of the four: quiet conditions invite bigger '
+                         'positions, and the positions are what make the eventual move violent. '
+                         'Can persist for months \u2014 a watch state, not a trigger.')}
+    return {'name': 'Quiet, and nobody\u2019s leaning',
+            'body': 'Ordinary spot conditions and unremarkable positioning. The usual state.'}
+
+
 # yfinance symbol for each asset's price history (used for the price-vs-score
 # charts). Same tickers backtest_asset_outlook.py already uses successfully.
 STOOQ_ASSET_MAP = {
@@ -1421,6 +1711,22 @@ def main():
         uf = model['usd_flow']
         print(f"  {uf['direction']} \u2014 1m {uf['chg_1m_pct']}% (z {uf['z_1m']}), "
               f"{len(uf['assets'])} assets scored")
+
+    # Speculative positioning. Deliberately AFTER the model is computed and
+    # never folded into it: a dead CFTC feed costs one panel, not the run.
+    print('Fetching CFTC speculative positioning...')
+    model['cot_positioning'] = compute_cot_positioning()
+    if model['cot_positioning']:
+        cp = model['cot_positioning']
+        print(f"  composite crowding {cp['composite_crowding']} as of {cp['as_of']}, "
+              f"{len(cp['contracts'])} contracts, {cp['coverage']*100:.0f}% coverage by weight")
+        model['fx_quadrant'] = cot_quadrant(model.get('fx_stress'), cp['composite_crowding'])
+        if model['fx_quadrant']:
+            print(f"  FX read: {model['fx_quadrant']['name']}")
+    else:
+        model['cot_positioning'] = None
+        model['fx_quadrant'] = None
+        print('  positioning unavailable this run \u2014 panel will be hidden')
 
     print('Reconstructing full risk-score history (~180 days, every metric, sampled every 3 days)...')
     today = datetime.now(timezone.utc).date()
