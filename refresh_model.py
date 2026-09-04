@@ -1040,6 +1040,143 @@ USD_BETA_WINDOW = 60      # sessions in each beta/correlation regression
 USD_Z_WINDOW = 750        # ~3 years of same-horizon moves for the z-score
 USD_MIN_OBS = 30          # below this, report nothing rather than nonsense
 
+# --- same-day dollar proxy from ECB reference rates ------------------------
+# DTWEXBGS is a Fed weekly release, so on any given day it is 3-7 days stale.
+# The index itself is only a trade-weighted basket of dollar crosses, and the
+# crosses are published daily by the ECB at ~16:00 CET. So: anchor on the last
+# real Fed observation, then chain the basket's daily moves onto it to reach
+# today.
+#
+# This is an ESTIMATE and is labelled as one everywhere it surfaces. Two
+# reasons it will not match the Fed's number exactly when the next print
+# lands: the weights below are approximations of the Fed's (which are revised
+# annually from trade data), and the basket is incomplete — Taiwan, Vietnam
+# and a few others have no ECB reference rate. Coverage is reported in the
+# output so you can see how much of the index the proxy actually spans.
+ECB_90D_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml'
+
+# Approximate Fed broad-index trade weights. Renormalised at runtime over
+# whichever currencies the ECB actually returned, so a missing rate dilutes
+# coverage rather than silently skewing the index.
+USD_BASKET_WEIGHTS = {
+    'EUR': .192, 'CNY': .148, 'CAD': .135, 'MXN': .134, 'JPY': .060,
+    'GBP': .048, 'KRW': .036, 'INR': .026, 'CHF': .020, 'BRL': .019,
+    'SGD': .016, 'MYR': .014, 'AUD': .013, 'THB': .012, 'HKD': .012,
+    'IDR': .007, 'PHP': .006, 'SEK': .005, 'ZAR': .004, 'ILS': .004,
+}
+
+
+def fetch_ecb_daily():
+    """ECB euro reference rates for the last 90 days.
+
+    Returns {date: {currency: units per EUR}}, with EUR itself included as
+    1.0 so it can be treated like any other basket member. Returns {} on any
+    failure — the caller falls back to the unextended Fed series rather than
+    failing the whole run over a nice-to-have."""
+    try:
+        text = http_get(ECB_90D_URL, timeout=30)
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        print(f'  WARN: ECB reference rates unavailable: {e}', file=sys.stderr)
+        return {}
+
+    try:
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(text)
+    except Exception as e:
+        print(f'  WARN: ECB XML parse failed: {e}', file=sys.stderr)
+        return {}
+
+    out = {}
+    # The feed is namespaced; matching on the tag suffix avoids hard-coding a
+    # namespace URI that the ECB has changed before (ecb.int -> ecb.europa.eu).
+    for node in root.iter():
+        if not node.tag.endswith('Cube'):
+            continue
+        day = node.get('time')
+        if not day:
+            continue
+        rates = {'EUR': 1.0}
+        for child in node:
+            ccy, rate = child.get('currency'), child.get('rate')
+            if not ccy or not rate:
+                continue
+            try:
+                rates[ccy] = float(rate)
+            except ValueError:
+                continue
+        if len(rates) > 1:
+            out[day] = rates
+    return out
+
+
+def build_usd_daily(S):
+    """The Fed's broad dollar series, extended to the present with an
+    ECB-derived estimate. Returns (series, meta).
+
+    Each appended point carries est=True, so the dashboard can draw the
+    estimated stretch differently from the published one instead of
+    presenting a guess with the same authority as a Fed print."""
+    official = list(S.get('DTWEXBGS') or [])
+    meta = {'official_as_of': official[-1]['date'] if official else None,
+            'proxy_dates': [], 'basket_coverage': None, 'proxy_note': None}
+    if not official:
+        return official, meta
+
+    ecb = fetch_ecb_daily()
+    if not ecb:
+        meta['proxy_note'] = 'ECB reference rates were unreachable this run — showing the Fed series as published.'
+        return official, meta
+
+    anchor_date = official[-1]['date']
+    anchor_value = official[-1]['value']
+
+    # Base day = the most recent ECB quote on or before the Fed's last print.
+    # Chaining from any other day would splice in a move the Fed number
+    # already contains, double-counting it.
+    base_days = [d for d in ecb if d <= anchor_date]
+    if not base_days:
+        meta['proxy_note'] = 'No ECB quote on or before the last Fed observation — showing the Fed series as published.'
+        return official, meta
+    base_day = max(base_days)
+    base = ecb[base_day]
+
+    def per_usd(rates, ccy):
+        """Units of `ccy` per USD, from euro-based quotes."""
+        usd = rates.get('USD')
+        if not usd:
+            return None
+        if ccy == 'EUR':
+            return 1.0 / usd
+        r = rates.get(ccy)
+        return (r / usd) if r else None
+
+    import math
+    forward = sorted(d for d in ecb if d > anchor_date)
+    coverage = None
+    for day in forward:
+        cur = ecb[day]
+        acc, wsum = 0.0, 0.0
+        for ccy, w in USD_BASKET_WEIGHTS.items():
+            s0, s1 = per_usd(base, ccy), per_usd(cur, ccy)
+            if not s0 or not s1:
+                continue
+            acc += w * math.log(s1 / s0)
+            wsum += w
+        if wsum <= 0:
+            continue
+        # Renormalising by wsum treats the covered currencies as
+        # representative of the whole basket — the standard approach, and the
+        # reason coverage is worth reporting alongside the number.
+        official.append({'date': day, 'value': anchor_value * math.exp(acc / wsum), 'est': True})
+        meta['proxy_dates'].append(day)
+        coverage = wsum
+
+    meta['basket_coverage'] = round(coverage, 3) if coverage is not None else None
+    if meta['proxy_dates']:
+        meta['proxy_note'] = (f"Extended past the Fed's {anchor_date} print with ECB reference rates covering "
+                              f"{coverage*100:.0f}% of the basket by weight. Estimated, not published.")
+    return official, meta
+
 # All of these are already fetched via STOOQ_ASSET_MAP — no new downloads.
 USD_FLOW_ASSETS = [
     ('Emerging-market bonds', 'EMB'),
@@ -1113,21 +1250,31 @@ def _beta_r2(y, x):
     return sxy / sxx, corr, corr ** 2
 
 
-def compute_usd_flow(S, yf_data):
+def compute_usd_flow(S, yf_data, usd=None, usd_meta=None):
     """Dollar impulse plus per-asset sensitivity. Returns None if the dollar
     series is too short to say anything, so the dashboard can hide the
-    section rather than render a panel full of dashes."""
-    usd = S.get('DTWEXBGS') or []
+    section rather than render a panel full of dashes.
+
+    `usd` is the possibly-ECB-extended series from build_usd_daily(); it
+    falls back to the raw Fed series so this stays callable on its own."""
+    usd = usd if usd is not None else (S.get('DTWEXBGS') or [])
+    usd_meta = usd_meta or {}
     if len(usd) < USD_Z_WINDOW // 2:
         print('  WARN: DTWEXBGS too short for the USD flow panel', file=sys.stderr)
         return None
 
     vals = [p['value'] for p in usd]
     dates = [p['date'] for p in usd]
+    est_dates = set(usd_meta.get('proxy_dates') or [])
 
     out = {
         'as_of': dates[-1],
         'index_level': vals[-1],
+        'index_is_estimate': dates[-1] in est_dates,
+        'official_as_of': usd_meta.get('official_as_of'),
+        'proxy_days': len(est_dates),
+        'basket_coverage': usd_meta.get('basket_coverage'),
+        'proxy_note': usd_meta.get('proxy_note'),
         'window': USD_BETA_WINDOW,
         'assets': [],
     }
@@ -1158,7 +1305,8 @@ def compute_usd_flow(S, yf_data):
     for i in range(max(0, len(chgs1) - 250), len(chgs1)):
         z = _zscore(chgs1[i], chgs1[max(0, i - USD_Z_WINDOW):i + 1])
         if z is not None:
-            hist.append({'date': dates[i + 21], 'z': round(z, 2)})
+            d = dates[i + 21]
+            hist.append({'date': d, 'z': round(z, 2), 'est': d in est_dates})
     out['impulse_history'] = hist
 
     # Dollar's own move across the beta window, so each asset's "explained by
@@ -1173,6 +1321,9 @@ def compute_usd_flow(S, yf_data):
         px = yf_data.get(ticker) or []
         if not px:
             continue
+        # Regressing against the extended series matters: equity closes are
+        # available for days the Fed hasn't printed yet, and without the
+        # proxy those sessions would drop out of the shared-date join.
         r_asset, r_usd = _aligned_returns(px, usd, USD_BETA_WINDOW)
         beta, corr, r2 = _beta_r2(r_asset, r_usd)
         if beta is None:
@@ -1255,8 +1406,17 @@ def main():
         asset_price_history[name] = arr[-180:] if arr else []
         print(f'  {name} ({symbol}): {len(asset_price_history[name])} obs' if arr else f'  {name} ({symbol}): FAILED')
 
+    print('Extending the broad dollar index to today via ECB reference rates...')
+    usd_daily, usd_meta = build_usd_daily(S)
+    if usd_meta['proxy_dates']:
+        print(f"  Fed print {usd_meta['official_as_of']} \u2192 estimated through "
+              f"{usd_meta['proxy_dates'][-1]} ({len(usd_meta['proxy_dates'])} days, "
+              f"{usd_meta['basket_coverage']*100:.0f}% basket coverage)")
+    else:
+        print(f"  no extension this run \u2014 {usd_meta.get('proxy_note') or 'nothing newer than the Fed print'}")
+
     print('Computing dollar impulse and asset sensitivity...')
-    model['usd_flow'] = compute_usd_flow(S, yf_data)
+    model['usd_flow'] = compute_usd_flow(S, yf_data, usd=usd_daily, usd_meta=usd_meta)
     if model['usd_flow']:
         uf = model['usd_flow']
         print(f"  {uf['direction']} \u2014 1m {uf['chg_1m_pct']}% (z {uf['z_1m']}), "
