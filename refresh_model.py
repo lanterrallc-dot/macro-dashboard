@@ -1014,6 +1014,191 @@ ASSET_RISK_MAP = {
 }
 
 
+# --- USD flow / asset sensitivity ------------------------------------------
+# Honest framing, because the page should not overclaim: you cannot observe
+# money moving into or out of the dollar. Real flow data (TIC, custody
+# holdings, CFTC positioning) is weekly-to-monthly and lagged by weeks. What
+# IS observable daily is dollar DIRECTION, and how each asset class has been
+# co-moving with it. That is what this computes, and the panel says so.
+#
+# Two parts:
+#   1. Impulse — how far the broad dollar has moved over 21 and 63 sessions,
+#      z-scored against its own ~3 years of same-horizon moves, so "up 2% in
+#      a month" is judged against how often that actually happens rather
+#      than against a threshold someone picked.
+#   2. Sensitivity — per asset, a regression of its daily returns on the
+#      dollar's over the last 60 sessions. Beta = % the asset moved per 1%
+#      dollar move. r2 = how much of the asset's variation that explains.
+#      Low r2 is the NORMAL state for equities; EM credit, EM equity and
+#      commodities are where the dollar usually bites. The r2 is the part
+#      worth watching — a beta with no explanatory power behind it is noise.
+#
+# NOTE: DTWEXBGS is published by the Fed with a few business days' lag, so
+# this panel's as-of date will usually trail the ECB-based FX pages.
+
+USD_BETA_WINDOW = 60      # sessions in each beta/correlation regression
+USD_Z_WINDOW = 750        # ~3 years of same-horizon moves for the z-score
+USD_MIN_OBS = 30          # below this, report nothing rather than nonsense
+
+# All of these are already fetched via STOOQ_ASSET_MAP — no new downloads.
+USD_FLOW_ASSETS = [
+    ('Emerging-market bonds', 'EMB'),
+    ('Emerging-market stocks', 'EEM'),
+    ('Gold', 'GLD'),
+    ('Oil', 'USO'),
+    ('Broad commodities', 'DBC'),
+    ('High-yield bonds', 'HYG'),
+    ('Long Treasuries', 'TLT'),
+    ('S&P 500', 'SPY'),
+    ('Nasdaq / growth', 'QQQ'),
+    ('Bitcoin', 'BTC-USD'),
+]
+
+
+def _horizon_changes(vals, n):
+    """Every n-observation % change in a value series, in order. Keeps a
+    None placeholder rather than skipping, so positions stay aligned with
+    the date list the caller holds."""
+    out = []
+    for i in range(n, len(vals)):
+        prev = vals[i - n]
+        out.append((vals[i] / prev - 1) if prev else None)
+    return out
+
+
+def _zscore(current, pool):
+    """Where `current` sits in `pool`, in standard deviations. Used instead
+    of a percentile here because the sign matters — a dollar falling hard is
+    as interesting as one rising hard, and a percentile flattens that."""
+    clean = [v for v in pool if v is not None]
+    if current is None or len(clean) < USD_MIN_OBS:
+        return None
+    m = sum(clean) / len(clean)
+    var = sum((v - m) ** 2 for v in clean) / len(clean)
+    if var <= 0:
+        return None
+    return (current - m) / (var ** 0.5)
+
+
+def _aligned_returns(a_series, b_series, window):
+    """Daily % changes of two series over the dates they BOTH have, most
+    recent `window` of them. Aligning on shared dates matters: FRED and the
+    equity feed keep different holiday calendars, and pairing a Monday
+    dollar move against a Tuesday equity move would quietly wreck the beta."""
+    bmap = {p['date']: p['value'] for p in b_series}
+    common = sorted(((p['date'], p['value'], bmap[p['date']])
+                     for p in a_series if p['date'] in bmap), key=lambda r: r[0])
+    ra, rb = [], []
+    for i in range(1, len(common)):
+        pa, pb = common[i - 1][1], common[i - 1][2]
+        if not pa or not pb:
+            continue
+        ra.append(common[i][1] / pa - 1)
+        rb.append(common[i][2] / pb - 1)
+    return ra[-window:], rb[-window:]
+
+
+def _beta_r2(y, x):
+    """Slope of y on x, the correlation, and the r2 of that fit. Plain least
+    squares — no numpy, to keep this script dependency-light."""
+    if len(y) < USD_MIN_OBS or len(y) != len(x):
+        return None, None, None
+    my, mx = sum(y) / len(y), sum(x) / len(x)
+    sxy = sum((a - my) * (b - mx) for a, b in zip(y, x))
+    sxx = sum((b - mx) ** 2 for b in x)
+    syy = sum((a - my) ** 2 for a in y)
+    if sxx <= 0 or syy <= 0:
+        return None, None, None
+    corr = sxy / ((sxx * syy) ** 0.5)
+    return sxy / sxx, corr, corr ** 2
+
+
+def compute_usd_flow(S, yf_data):
+    """Dollar impulse plus per-asset sensitivity. Returns None if the dollar
+    series is too short to say anything, so the dashboard can hide the
+    section rather than render a panel full of dashes."""
+    usd = S.get('DTWEXBGS') or []
+    if len(usd) < USD_Z_WINDOW // 2:
+        print('  WARN: DTWEXBGS too short for the USD flow panel', file=sys.stderr)
+        return None
+
+    vals = [p['value'] for p in usd]
+    dates = [p['date'] for p in usd]
+
+    out = {
+        'as_of': dates[-1],
+        'index_level': vals[-1],
+        'window': USD_BETA_WINDOW,
+        'assets': [],
+    }
+
+    for label, n in (('1m', 21), ('3m', 63)):
+        chgs = _horizon_changes(vals, n)
+        cur = chgs[-1] if chgs else None
+        z = _zscore(cur, chgs[-USD_Z_WINDOW:])
+        out[f'chg_{label}_pct'] = round(cur * 100, 2) if cur is not None else None
+        out[f'z_{label}'] = round(z, 2) if z is not None else None
+
+    # Plain-language read on the 1-month impulse. The gates are deliberately
+    # wide: inside ±0.75 SD the dollar is doing nothing worth a headline.
+    z1 = out.get('z_1m')
+    if z1 is None:
+        out['direction'] = 'Not enough data'
+    elif z1 >= 0.75:
+        out['direction'] = 'Money moving into the dollar'
+    elif z1 <= -0.75:
+        out['direction'] = 'Money moving out of the dollar'
+    else:
+        out['direction'] = 'Dollar going nowhere in particular'
+
+    # ~12 months of the 1-month impulse, for the sparkline. Each point is
+    # z-scored against only what was known at the time — no lookahead.
+    chgs1 = _horizon_changes(vals, 21)
+    hist = []
+    for i in range(max(0, len(chgs1) - 250), len(chgs1)):
+        z = _zscore(chgs1[i], chgs1[max(0, i - USD_Z_WINDOW):i + 1])
+        if z is not None:
+            hist.append({'date': dates[i + 21], 'z': round(z, 2)})
+    out['impulse_history'] = hist
+
+    # Dollar's own move across the beta window, so each asset's "explained by
+    # the dollar" figure has something to be a share of.
+    usd_window_move = None
+    if len(vals) > USD_BETA_WINDOW:
+        prev = vals[-1 - USD_BETA_WINDOW]
+        usd_window_move = (vals[-1] / prev - 1) * 100 if prev else None
+    out['usd_window_move_pct'] = round(usd_window_move, 2) if usd_window_move is not None else None
+
+    for name, ticker in USD_FLOW_ASSETS:
+        px = yf_data.get(ticker) or []
+        if not px:
+            continue
+        r_asset, r_usd = _aligned_returns(px, usd, USD_BETA_WINDOW)
+        beta, corr, r2 = _beta_r2(r_asset, r_usd)
+        if beta is None:
+            continue
+        own_move = (sum(r_asset) * 100) if r_asset else None   # ~cumulative; close enough at daily scale
+        explained = (beta * usd_window_move) if usd_window_move is not None else None
+        out['assets'].append({
+            'name': name,
+            'ticker': ticker,
+            'beta': round(beta, 2),
+            'corr': round(corr, 2),
+            'r2': round(r2, 3),
+            'own_move_pct': round(own_move, 2) if own_move is not None else None,
+            'explained_pct': round(explained, 2) if explained is not None else None,
+            'n': len(r_asset),
+        })
+
+    # Most dollar-driven first — that ordering IS the finding.
+    out['assets'].sort(key=lambda a: -(a['r2'] or 0))
+    out['note'] = ('Co-movement, not flows. Nobody publishes daily dollar flow data; this measures '
+                   'how the dollar moved and what moved with it. Causation runs both ways \u2014 risk-off '
+                   'pushes the dollar up as much as a rising dollar pushes risk assets down. Assets low '
+                   'on this list are not immune to the dollar, just not tracking it right now.')
+    return out
+
+
 def main():
     print('Fetching FRED series...')
     S = {}
@@ -1048,7 +1233,11 @@ def main():
 
     print('Fetching equity/asset price data (yfinance, single bulk call)...')
     all_yf_tickers = sorted(set(list(STOOQ_TICKERS.values()) + list(STOOQ_ASSET_MAP.values())))
-    yf_data = fetch_yfinance_bulk(all_yf_tickers, days_back=220)
+    # 500 days (not 220): the USD sensitivity panel runs 60-session
+    # regressions, and a 220-day pull leaves barely enough sessions for one
+    # window once holidays and a young ticker's short history are taken out.
+    # asset_price_history still trims to [-180:], so nothing else changes.
+    yf_data = fetch_yfinance_bulk(all_yf_tickers, days_back=500)
 
     E = {}
     for name, ticker in STOOQ_TICKERS.items():
@@ -1065,6 +1254,13 @@ def main():
         arr = yf_data.get(symbol, [])
         asset_price_history[name] = arr[-180:] if arr else []
         print(f'  {name} ({symbol}): {len(asset_price_history[name])} obs' if arr else f'  {name} ({symbol}): FAILED')
+
+    print('Computing dollar impulse and asset sensitivity...')
+    model['usd_flow'] = compute_usd_flow(S, yf_data)
+    if model['usd_flow']:
+        uf = model['usd_flow']
+        print(f"  {uf['direction']} \u2014 1m {uf['chg_1m_pct']}% (z {uf['z_1m']}), "
+              f"{len(uf['assets'])} assets scored")
 
     print('Reconstructing full risk-score history (~180 days, every metric, sampled every 3 days)...')
     today = datetime.now(timezone.utc).date()
