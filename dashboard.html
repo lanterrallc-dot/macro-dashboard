@@ -266,12 +266,19 @@
           <span id="usdEstLegend" style="display:none"><i style="background:#e8b93f; opacity:.55"></i>dashed — estimated from ECB rates, not yet published by the Fed</span>
         </div>
         <div class="usd-spark"><canvas id="usdImpulseCanvas"></canvas></div>
-        <div class="table-scroll" style="margin-top:22px;">
+        <p style="font-size:12.5px; color:var(--muted); line-height:1.6; margin:22px 0 -6px; max-width:70ch;">
+          Read each row as: if the broad dollar gains 1%, this asset moves by that amount on the same day.
+          The relationship is fitted as a single straight line, so it runs both ways — a 1% dollar
+          <em style="font-style:normal; color:var(--text)">fall</em> implies the opposite sign. Rows near the
+          bottom have almost no explanatory power behind them, so treat those numbers as noise rather than as
+          a small effect.
+        </p>
+        <div class="table-scroll" style="margin-top:14px;">
           <table>
             <thead><tr>
               <th>Asset</th>
               <th class="col-optional">Ticker</th>
-              <th>Per 1% dollar move</th>
+              <th>If the dollar rises 1%</th>
               <th>How tightly it tracks</th>
               <th class="col-optional">Its own move</th>
             </tr></thead>
@@ -839,13 +846,16 @@ function renderUsdFlow(uf){
     // Bar length is r2 on a 0–0.5 scale — half the daily variation explained
     // is already an unusually tight relationship, so 0.5 fills the bar.
     const fill = clamp((a.r2||0)/0.5, 0, 1) * 100;
-    const moveWord = a.beta < 0 ? 'falls' : 'rises';
+    // Signed against a RISING dollar, which is what the column header states.
+    // The old "falls 3.21%" phrasing left the input direction implicit and
+    // read as though the asset just drops whenever the dollar moves at all.
+    const resp = `${a.beta<0?'\u2212':'+'}${Math.abs(a.beta).toFixed(2)}%`;
     const betaCol = a.beta < 0 ? 'var(--elevated)' : 'var(--live)';
     const tr=document.createElement('tr');
     tr.innerHTML = `
       <td class="ind-name">${a.name}</td>
       <td class="mono-val col-optional" style="color:var(--muted-dim)">${a.ticker}</td>
-      <td class="mono-val" style="color:${betaCol}">${moveWord} ${Math.abs(a.beta).toFixed(2)}%</td>
+      <td class="mono-val" style="color:${betaCol}">${resp}</td>
       <td>
         <div class="usd-strength" style="color:${labelCol}">${label} <span style="color:var(--muted-dim)">· r²&nbsp;${a.r2.toFixed(2)}</span></div>
         <div class="usd-bar"><i style="width:${fill.toFixed(1)}%; background:${labelCol}"></i></div>
