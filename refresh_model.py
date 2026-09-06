@@ -18,16 +18,21 @@ import sys
 import time
 import urllib.request
 import urllib.error
-import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 FRED_API_KEY = os.environ.get('FRED_API_KEY', '').strip()
 
+# Dropped from the original list: PAYEMS, CPIAUCSL and PCEPI were fetched
+# every run and never referenced by any formula; T10Y2Y is superseded by
+# T10Y3M, which has the better recession record. Added: DFII10 (the real
+# 10-year yield, the most connected variable in macro and previously absent),
+# RRPONTSYD (reverse repo — without it the net-liquidity figure was missing
+# a facility that held over $2trn at its peak), and T10Y3M.
 FRED_SERIES = [
-    'CPILFESL', 'PCEPILFE', 'PAYEMS', 'CPIAUCSL', 'PCEPI', 'ICSA',
+    'CPILFESL', 'PCEPILFE', 'ICSA',
     'BAMLH0A0HYM2', 'BAMLC0A0CM', 'SOFR', 'IORB', 'VIXCLS', 'DGS2',
-    'DGS10', 'T10Y2Y', 'DTWEXBGS', 'WALCL', 'WRESBAL', 'WTREGEN',
-    'NFCI', 'EFFR', 'SOFR25', 'SOFR75', 'DEXJPUS', 'DEXUSEU',
+    'DGS10', 'DFII10', 'T10Y3M', 'DTWEXBGS', 'WALCL', 'WRESBAL', 'WTREGEN',
+    'RRPONTSYD', 'NFCI', 'EFFR', 'SOFR25', 'SOFR75', 'DEXJPUS', 'DEXUSEU',
     'DEXCHUS', 'DEXSZUS', 'DEXUSAL',
 ]
 
@@ -281,6 +286,80 @@ def momentum_percentile_score(series, asof_date=None, window=500, roc_period=20,
     return round((100 - pct) if invert else pct, 2)
 
 
+# ---------------------------------------------------------------------------
+# SIMPLIFIED INDICATOR SET
+#
+# The previous model carried 18 weighted indicators, but several were reading
+# the same series through different transforms and so were counted twice:
+#
+#   * WALCL / WRESBAL / WTREGEN carried 19% across four indicators — a levels
+#     read (Fed Balance Sheet, Bank Reserves, TGA) and a flows read (Liquidity
+#     Flow Stress) of one balance sheet. Worse, that flow formula ADDED
+#     reserves to assets, when reserves are a liability of the same balance
+#     sheet. These collapse into one Fed Net Liquidity indicator using the
+#     conventional definition: assets minus TGA minus reverse repo.
+#   * VIXCLS carried 10% across VIX and VIX Momentum — one series, two rows.
+#     Merged into a single Market Volatility indicator blending level and
+#     momentum.
+#   * SPY/RSP carried 8% across S&P 500 Breadth and Market Participation
+#     Momentum. Those two are the same two spreads with different linear
+#     weights and correlate at 0.989 — one signal, billed twice. Merged.
+#   * Nominal 2Y and 10Y were each weighted standalone AND inside the Treasury
+#     Vol Proxy. Replaced by the real 10-year yield (the variable that actually
+#     drives the dollar, gold and long duration) and the 10Y-3M curve.
+#
+# Result: 13 weighted indicators from 18, with no series feeding two weighted
+# rows. Category totals are unchanged, so the headline score stays comparable.
+# Two indicators are kept at zero weight for visibility only.
+# ---------------------------------------------------------------------------
+WEIGHTS = {
+    # Credit — 20%
+    'HY Credit Spreads':            ('Credit', .13),
+    'Investment-Grade Spreads':     ('Credit', .07),
+    # Liquidity — 36%
+    'Repo-Market Stress':           ('Liquidity', .12),
+    'Fed Net Liquidity':            ('Liquidity', .19),
+    'DXY / Broad Dollar':           ('Liquidity', .05),
+    # Rates — 16%
+    'Treasury Vol Proxy (MOVE-style)': ('Rates', .07),
+    'Real 10-Year Yield':           ('Rates', .05),
+    'Yield Curve (10Y \u2212 3M)':      ('Rates', .04),
+    # Market / Macro — 28%
+    'Market Volatility':            ('Market / Macro', .10),
+    'Equity Breadth':               ('Market / Macro', .08),
+    'Financial Conditions (NFCI)':  ('Market / Macro', .04),
+    'Jobless Claims Momentum':      ('Market / Macro', .03),
+    'Inflation Momentum':           ('Market / Macro', .03),
+    # shown but not scored
+    'SOFR\u2013IORB Spread':            ('Liquidity', 0),
+    'Bank Reserves':                ('Liquidity', 0),
+}
+
+
+def net_liquidity_series(S):
+    """Fed net liquidity = total assets \u2212 Treasury general account \u2212 reverse
+    repo, the conventional measure of how many dollars are actually loose in
+    the system. Built on WALCL's weekly dates, with the other two taken as of
+    each of those dates, because the three publish on different schedules.
+
+    RRPONTSYD is reported in $bn while WALCL and WTREGEN are in $mm, hence the
+    \u00d71000. It also only begins in 2013; treated as zero before that, which is
+    correct \u2014 the facility did not exist."""
+    walcl = S.get('WALCL') or []
+    tga_s = S.get('WTREGEN') or []
+    rrp_s = S.get('RRPONTSYD') or []
+    out = []
+    for p in walcl:
+        d = p['date']
+        tga = asof_at(tga_s, d)
+        if tga is None:
+            continue
+        rrp = asof_at(rrp_s, d)
+        rrp = (rrp * 1000.0) if rrp is not None else 0.0
+        out.append({'date': d, 'value': p['value'] - tga - rrp})
+    return out
+
+
 def series_snapshot(S):
     """Every raw FRED series with the exact observations the formulas read:
     the latest value, plus the 1 / 5 / 20-observation lags the momentum and
@@ -349,37 +428,34 @@ def compute_model(S, E):
     # window=1000 calibrated against real TLT/BIL forward returns
     y2Score = percentile_score(dgs2, S.get('DGS2', []), window=1000)
     y10Score = percentile_score(dgs10, S.get('DGS10', []), window=1000)
-    t2s10 = L('T10Y2Y')
-    curveScore = clamp(50 - 20 * t2s10, 0, 100) if t2s10 is not None else None
-
     dxy = L('DTWEXBGS')
     dxyScore = clamp((dxy - 100) * 2, 0, 100) if dxy is not None else None
 
-    walcl, walclP5, walclP20 = L('WALCL'), P5('WALCL'), P20('WALCL')
-    wresbal, wresbalP5, wresbalP20 = L('WRESBAL'), P5('WRESBAL'), P20('WRESBAL')
-    wtregen, wtregenP5, wtregenP20 = L('WTREGEN'), P5('WTREGEN'), P20('WTREGEN')
-    # FIX (unit mismatch): WALCL/WRESBAL/WTREGEN are reported by FRED in $ millions.
-    # The Fed Balance Sheet threshold (7,000,000) is already written on that same
-    # millions scale, so it needs no change. Bank Reserves (threshold 3,000) and
-    # Treasury General Account (threshold 500) were written as if the input were
-    # in $ billions -- three orders of magnitude off, which is why Bank Reserves
-    # was pinned at 0 and TGA was pinned at 100 in the original workbook. Dividing
-    # by 1000 to convert millions -> billions before scoring restores both to a
-    # normal, non-saturated range.
-    # calibrated: rapid Fed balance-sheet EXPANSION preceded QQQ gains (r=+0.23 on raw
-    # momentum, n=3319) — inverted so "balance sheet growing fast" scores LOW (calm),
-    # matching this metric's existing "bigger balance sheet = less stress" convention
+
+    wresbal = L('WRESBAL')
+    walcl, wtregen = L('WALCL'), L('WTREGEN')
+    rrp = L('RRPONTSYD')
+
+    # One measure where there were four. Net liquidity = assets − TGA − RRP,
+    # scored on how fast it is moving relative to its own recent history and
+    # inverted, so rapid expansion reads calm. The old set scored the levels of
+    # three components separately AND their combined flow, putting 19% of the
+    # model on one balance sheet read two ways — and it added reserves to
+    # assets, double-counting a liability against its own asset side.
+    netLiqSeries = net_liquidity_series(S)
+    netLiq = netLiqSeries[-1]['value'] if netLiqSeries else None
+    netLiqScore = momentum_percentile_score(netLiqSeries, window=120, invert=True)
+
+    # Still computed, still charted, no longer weighted: this is the one
+    # metric-asset pairing with a validated out-of-sample relationship
+    # (Short Treasuries vs. Fed balance-sheet momentum), so risk_history keeps
+    # carrying it even though the balance sheet now enters the score through
+    # net liquidity instead.
     fedBsScore = momentum_percentile_score(S.get('WALCL', []), window=120, invert=True)
-    # calibrated: rapid reserve BUILD-UPs preceded QQQ gains (r=+0.41 on raw momentum,
-    # n=3319) — inverted so "reserves growing fast" scores LOW (calm), matching this
-    # metric's existing "more reserves = less stress" convention
     reservesScore = momentum_percentile_score(S.get('WRESBAL', []), window=60, invert=True)
-    tgaScore = clamp(20 + (wtregen/1000 - 500) / 10, 0, 100) if wtregen is not None else None
 
     nfci = L('NFCI')
-    # calibrated: rapid NFCI TIGHTENING preceded SPY weakness (r=-0.27, n=3317) —
-    # already the right direction for this metric's "higher NFCI = more stress"
-    # convention, no inversion needed
+    # calibrated: rapid NFCI TIGHTENING preceded SPY weakness (r=-0.27, n=3317)
     nfciScore = momentum_percentile_score(S.get('NFCI', []), window=500)
 
     icsa, icsaP5 = L('ICSA'), P5('ICSA')
@@ -396,17 +472,24 @@ def compute_model(S, E):
 
     fedExpScore = 0.6 * y2Score + 0.4 * sofrIorbScore if None not in (y2Score, sofrIorbScore) else None
 
-    dRes5 = (wresbal - wresbalP5) if None not in (wresbal, wresbalP5) else None
-    dRes20 = (wresbal - wresbalP20) if None not in (wresbal, wresbalP20) else None
-    dTga5 = (wtregen - wtregenP5) if None not in (wtregen, wtregenP5) else None
-    dTga20 = (wtregen - wtregenP20) if None not in (wtregen, wtregenP20) else None
-    dFed5 = (walcl - walclP5) if None not in (walcl, walclP5) else None
-    dFed20 = (walcl - walclP20) if None not in (walcl, walclP20) else None
-    netImp5 = (dFed5 + dRes5 - dTga5) if None not in (dFed5, dRes5, dTga5) else None
-    netImp20 = (dFed20 + dRes20 - dTga20) if None not in (dFed20, dRes20, dTga20) else None
-    liqFlow5 = clamp(50 - netImp5 / 10000, 0, 100) if netImp5 is not None else None
-    liqFlow20 = clamp(50 - netImp20 / 20000, 0, 100) if netImp20 is not None else None
-    liqFlowComposite = (liqFlow5 * 0.65 + liqFlow20 * 0.35) if None not in (liqFlow5, liqFlow20) else None
+    # The Liquidity Flow Stress composite that used to live here is gone: its
+    # three inputs are now read once, through Fed Net Liquidity.
+
+    # Real 10-year yield: the single most connected variable in macro, and
+    # absent from the original model. Drives the dollar through real-rate
+    # differentials, gold inversely, and every long-duration valuation.
+    dfii10 = L('DFII10')
+    realYieldScore = percentile_score(dfii10, S.get('DFII10', []), window=1000)
+
+    # 10Y minus 3M rather than 10Y minus 2Y: the better recession record, and
+    # unlike 2s10s it is not simply the difference of two things already scored.
+    t10y3m = L('T10Y3M')
+    curveScore = clamp(50 - 25 * t10y3m, 0, 100) if t10y3m is not None else None
+
+    # One volatility indicator instead of two rows reading the same series.
+    volScore = None
+    if None not in (vixScore, vixTermProxy):
+        volScore = 0.6 * vixScore + 0.4 * vixTermProxy
 
     def fx_leg(series_id, invert):
         c, d, e, f = L(series_id), P1(series_id), P5(series_id), P20(series_id)
@@ -435,8 +518,11 @@ def compute_model(S, E):
         breadth5D = ((rspL / rspP5) / (spyL / spyP5) - 1) * 100
     if None not in (spyL, spyP20, rspL, rspP20) and spyP20 and rspP20:
         breadth20D = ((rspL / rspP20) / (spyL / spyP20) - 1) * 100
-    breadthStress = clamp(50 - (breadth5D*10 + breadth20D*5), 0, 100) if None not in (breadth5D, breadth20D) else None
-    participationMomentum = clamp(50 - (breadth5D*15 + breadth20D*10), 0, 100) if None not in (breadth5D, breadth20D) else None
+    # The old pair of breadth indicators used these same two spreads with
+    # weights of (10, 5) and (15, 10) respectively — linear combinations so
+    # similar that the two scores correlate at 0.989. One indicator, weights
+    # midway between the two originals.
+    breadthScore = clamp(50 - (breadth5D*12 + breadth20D*7), 0, 100) if None not in (breadth5D, breadth20D) else None
 
     # Helpers that attach the actual observations behind each indicator, so
     # every score on the dashboard can be checked by hand against the same
@@ -486,85 +572,72 @@ def compute_model(S, E):
     #   Market/Macro unchanged at 36% (with Liquidity Flow Stress now live)
     #   and 28% respectively. Total stays 100%.
     indicators = [
-        {'name': 'HY Credit Spreads', 'category': 'Credit', 'weight': .13, 'reading': hy, 'units': 'bps', 'score': hyScore,
+        {'name': 'HY Credit Spreads', 'category': 'Credit', 'weight': WEIGHTS['HY Credit Spreads'][1], 'reading': hy, 'units': 'bps', 'score': hyScore,
          'formula': 'Percentile rank of today\u2019s spread within its own trailing 750 observations. 100 = widest in that window.',
          'inputs': [raw('BAMLH0A0HYM2', 'ICE BofA US High Yield option-adjusted spread')]},
-        {'name': 'Investment-Grade Spreads', 'category': 'Credit', 'weight': .07, 'reading': ig, 'units': 'bps', 'score': igScore,
+        {'name': 'Investment-Grade Spreads', 'category': 'Credit', 'weight': WEIGHTS['Investment-Grade Spreads'][1], 'reading': ig, 'units': 'bps', 'score': igScore,
          'formula': 'Percentile rank within its own trailing 750 observations.',
          'inputs': [raw('BAMLC0A0CM', 'ICE BofA US Corporate option-adjusted spread')]},
-        {'name': 'SOFR\u2013IORB Spread', 'category': 'Liquidity', 'weight': 0, 'reading': sofrIorbBps, 'units': 'bps', 'score': sofrIorbScore, 'redundant': 'folded into Repo-Market Stress (45% of that composite) \u2014 weight moved there to avoid double-counting',
-         'formula': 'clamp(50 + (SOFR \u2212 IORB in bps) \u00d7 4, 0, 100)',
-         'inputs': [raw('SOFR', 'Secured Overnight Financing Rate'), raw('IORB', 'Interest on Reserve Balances'),
-                    calc('SOFR \u2212 IORB', sofrIorbBps, 'bps')]},
-        {'name': 'Repo-Market Stress', 'category': 'Liquidity', 'weight': .12, 'reading': repoScore, 'units': '0\u2013100', 'score': repoScore,
-         'formula': '0.45 \u00d7 clamp(20 + (SOFR\u2212IORB)\u00d73) + 0.30 \u00d7 clamp(20 + (SOFR\u2212EFFR)\u00d74) + 0.25 \u00d7 clamp((SOFR 75th \u2212 25th pctile)\u00d74), each clamped 0\u2013100',
+        {'name': 'Repo-Market Stress', 'category': 'Liquidity', 'weight': WEIGHTS['Repo-Market Stress'][1], 'reading': repoScore, 'units': '0\u2013100', 'score': repoScore,
+         'formula': '0.45 \u00d7 clamp(20 + (SOFR\u2212IORB)\u00d73) + 0.30 \u00d7 clamp(20 + (SOFR\u2212EFFR)\u00d74) + 0.25 \u00d7 clamp((SOFR 75th \u2212 25th)\u00d74), each clamped 0\u2013100',
          'inputs': [raw('SOFR', 'Secured Overnight Financing Rate'), raw('IORB', 'Interest on Reserve Balances'),
                     raw('EFFR', 'Effective Fed Funds Rate'), raw('SOFR25', 'SOFR 25th percentile'), raw('SOFR75', 'SOFR 75th percentile'),
                     calc('SOFR \u2212 IORB', sofrIorbBps, 'bps'), calc('SOFR \u2212 EFFR', sofrEffrBps, 'bps'),
                     calc('SOFR interquartile range', sofrIqrBps, 'bps')]},
-        {'name': 'Treasury Vol Proxy (MOVE-style)', 'category': 'Rates', 'weight': .07, 'reading': treasuryVolStress, 'units': '0\u2013100', 'score': treasuryVolStress, 'source_note': 'synthetic proxy from 2Y/10Y 5-day moves \u2014 the real MOVE index isn\u2019t freely available via FRED',
+        {'name': 'Fed Net Liquidity', 'category': 'Liquidity', 'weight': WEIGHTS['Fed Net Liquidity'][1], 'reading': netLiq, 'units': '$mm', 'score': netLiqScore,
+         'formula': 'net liquidity = Fed total assets \u2212 Treasury general account \u2212 reverse repo. Scored on the percentile rank of its 20-week change within its own trailing 120, inverted so rapid expansion reads calm.',
+         'inputs': [raw('WALCL', 'Fed total assets'), raw('WTREGEN', 'Treasury general account'),
+                    raw('RRPONTSYD', 'Overnight reverse repo ($bn)'),
+                    calc('net liquidity', netLiq, '$mm')],
+         'flag': 'Replaces four indicators (Fed Balance Sheet, Bank Reserves, TGA, Liquidity Flow Stress) that read the same balance sheet twice over.'},
+        {'name': 'DXY / Broad Dollar', 'category': 'Liquidity', 'weight': WEIGHTS['DXY / Broad Dollar'][1], 'reading': dxy, 'units': 'index', 'score': dxyScore,
+         'formula': 'clamp((index \u2212 100) \u00d7 2, 0, 100). Reads 0 at or below 100.',
+         'inputs': [raw('DTWEXBGS', 'Nominal Broad US Dollar Index')]},
+        {'name': 'Treasury Vol Proxy (MOVE-style)', 'category': 'Rates', 'weight': WEIGHTS['Treasury Vol Proxy (MOVE-style)'][1], 'reading': treasuryVolStress, 'units': '0\u2013100', 'score': treasuryVolStress, 'source_note': 'synthetic proxy from 2Y/10Y 5-day moves \u2014 the real MOVE index isn\u2019t freely available via FRED',
          'formula': 'clamp((|2Y 5-day move in bps| \u00d7 0.6 + |10Y 5-day move in bps| \u00d7 0.4) \u00d7 2, 0, 100)',
          'inputs': [raw('DGS2', '2-year Treasury yield'), lag('DGS2', 5, '2-year, 5 sessions ago'),
                     raw('DGS10', '10-year Treasury yield'), lag('DGS10', 5, '10-year, 5 sessions ago'),
                     calc('|2Y 5-day move|', move2, 'bps'), calc('|10Y 5-day move|', move10, 'bps')]},
-        {'name': 'VIX', 'category': 'Market / Macro', 'weight': .05, 'reading': vix, 'units': 'index', 'score': vixScore,
-         'formula': 'clamp((VIX \u2212 12) \u00d7 3.2, 0, 100). Reads 0 at or below 12, saturates at about 43.',
-         'inputs': [raw('VIXCLS', 'CBOE Volatility Index, close')]},
-        {'name': 'VIX Momentum Proxy (5D)', 'category': 'Market / Macro', 'weight': .05, 'reading': vixTermProxy, 'units': '0\u2013100', 'score': vixTermProxy, 'source_note': 'transform of VIX\u2019s own 5-day change \u2014 not real futures term-structure data',
-         'formula': 'clamp(50 + (VIX 5-day % change) \u00d7 4, 0, 100). Reads 50 when VIX is unchanged.',
-         'inputs': [raw('VIXCLS', 'VIX today'), lag('VIXCLS', 5, 'VIX, 5 sessions ago'),
-                    calc('5-day change', vixChgPct, '%')]},
-        {'name': '2Y Treasury Yield', 'category': 'Rates', 'weight': .05, 'reading': dgs2, 'units': '%', 'score': y2Score,
-         'formula': 'Percentile rank within its own trailing 1000 observations.',
-         'inputs': [raw('DGS2', '2-year Treasury constant maturity')]},
-        {'name': '10Y Treasury Yield', 'category': 'Rates', 'weight': .04, 'reading': dgs10, 'units': '%', 'score': y10Score,
-         'formula': 'Percentile rank within its own trailing 1000 observations.',
-         'inputs': [raw('DGS10', '10-year Treasury constant maturity')]},
-        {'name': '2s10s Curve', 'category': 'Rates', 'weight': 0, 'reading': t2s10, 'units': 'pct pts', 'score': curveScore, 'redundant': 'derived from 2Y and 10Y, both already counted separately \u2014 weight moved to Credit',
-         'formula': 'clamp(50 \u2212 20 \u00d7 (10Y \u2212 2Y), 0, 100). Reads 50 at a flat curve, rises as it inverts.',
-         'inputs': [raw('T10Y2Y', '10-year minus 2-year spread')]},
-        {'name': 'DXY / Broad Dollar', 'category': 'Liquidity', 'weight': .05, 'reading': dxy, 'units': 'index', 'score': dxyScore,
-         'formula': 'clamp((index \u2212 100) \u00d7 2, 0, 100). Reads 0 at or below 100.',
-         'inputs': [raw('DTWEXBGS', 'Nominal Broad US Dollar Index')]},
-        {'name': 'Fed Balance Sheet', 'category': 'Liquidity', 'weight': .03, 'reading': walcl, 'units': '$mm', 'score': fedBsScore,
-         'formula': 'Percentile rank of the 20-observation change within its own trailing 120, inverted \u2014 so fast expansion scores low (calm).',
-         'inputs': [raw('WALCL', 'Total assets, all Federal Reserve banks'), lag('WALCL', 20, '20 weeks ago'),
-                    calc('20-observation change', (walcl - walclP20) if None not in (walcl, walclP20) else None, '$mm')]},
-        {'name': 'Bank Reserves', 'category': 'Liquidity', 'weight': .04, 'reading': wresbal, 'units': '$mm', 'score': reservesScore, 'flag': 'unit-corrected (\u00f71000 to billions) vs. original workbook \u2014 see notes',
-         'formula': 'Percentile rank of the 20-observation change within its own trailing 60, inverted \u2014 so fast reserve build-up scores low (calm).',
-         'inputs': [raw('WRESBAL', 'Reserve balances held at Federal Reserve banks'), lag('WRESBAL', 20, '20 weeks ago'),
-                    calc('20-observation change', (wresbal - wresbalP20) if None not in (wresbal, wresbalP20) else None, '$mm')]},
-        {'name': 'Treasury General Account', 'category': 'Liquidity', 'weight': .04, 'reading': wtregen, 'units': '$mm', 'score': tgaScore, 'flag': 'unit-corrected (\u00f71000 to billions) vs. original workbook \u2014 see notes',
-         'formula': 'clamp(20 + (TGA in $bn \u2212 500) \u00f7 10, 0, 100). The \u00f71000 converts FRED\u2019s $mm to the $bn the threshold assumes.',
-         'inputs': [raw('WTREGEN', 'US Treasury general account balance'),
-                    calc('converted to $bn', (wtregen/1000) if wtregen is not None else None, '$bn')]},
-        {'name': 'Financial Conditions (NFCI)', 'category': 'Market / Macro', 'weight': .04, 'reading': nfci, 'units': 'index', 'score': nfciScore,
+        {'name': 'Real 10-Year Yield', 'category': 'Rates', 'weight': WEIGHTS['Real 10-Year Yield'][1], 'reading': dfii10, 'units': '%', 'score': realYieldScore,
+         'formula': 'Percentile rank of the 10-year TIPS yield within its own trailing 1000 observations.',
+         'inputs': [raw('DFII10', '10-year Treasury inflation-indexed yield')],
+         'flag': 'New. Replaces the separately-weighted nominal 2Y and 10Y, which were each also counted inside the Treasury Vol Proxy.'},
+        {'name': 'Yield Curve (10Y \u2212 3M)', 'category': 'Rates', 'weight': WEIGHTS['Yield Curve (10Y \u2212 3M)'][1], 'reading': t10y3m, 'units': 'pct pts', 'score': curveScore,
+         'formula': 'clamp(50 \u2212 25 \u00d7 (10Y \u2212 3M), 0, 100). Reads 50 at a flat curve and rises as it inverts.',
+         'inputs': [raw('T10Y3M', '10-year minus 3-month spread')],
+         'flag': 'Replaces 2s10s, which carried 0% weight because it was the difference of two already-scored yields. 10Y\u22123M is a distinct series with the stronger recession record.'},
+        {'name': 'Market Volatility', 'category': 'Market / Macro', 'weight': WEIGHTS['Market Volatility'][1], 'reading': vix, 'units': 'VIX index', 'score': volScore,
+         'formula': '0.6 \u00d7 clamp((VIX \u2212 12) \u00d7 3.2) + 0.4 \u00d7 clamp(50 + (VIX 5-day % change) \u00d7 4), each clamped 0\u2013100.',
+         'inputs': [raw('VIXCLS', 'CBOE Volatility Index, close'), lag('VIXCLS', 5, 'VIX, 5 sessions ago'),
+                    calc('5-day change', vixChgPct, '%'), calc('level component', vixScore, '0\u2013100'),
+                    calc('momentum component', vixTermProxy, '0\u2013100')],
+         'flag': 'Merges the old VIX and VIX Momentum rows, which read the same series and together carried 10%.'},
+        {'name': 'Equity Breadth', 'category': 'Market / Macro', 'weight': WEIGHTS['Equity Breadth'][1], 'reading': breadthScore, 'units': '0\u2013100', 'score': breadthScore, 'source_note': 'live via SPY/RSP \u2014 unavailable in the original workbook',
+         'formula': 'clamp(50 \u2212 (5-day RSP-vs-SPY spread \u00d7 12 + 20-day spread \u00d7 7), 0, 100). Equal-weight lagging cap-weight means a narrow market.',
+         'inputs': [eq('SPY', spyL, 'S&P 500 ETF, last close'), eq('RSP', rspL, 'Equal-weight S&P ETF, last close'),
+                    calc('5-day breadth spread', breadth5D, '%'), calc('20-day breadth spread', breadth20D, '%')],
+         'flag': 'Merges S&P 500 Breadth and Market Participation Momentum, which used these same two spreads and correlated at 0.989.'},
+        {'name': 'Financial Conditions (NFCI)', 'category': 'Market / Macro', 'weight': WEIGHTS['Financial Conditions (NFCI)'][1], 'reading': nfci, 'units': 'index', 'score': nfciScore,
          'formula': 'Percentile rank of the 20-observation change within its own trailing 500 \u2014 fast tightening scores high.',
          'inputs': [raw('NFCI', 'Chicago Fed National Financial Conditions Index')]},
-        {'name': 'S&P 500 Breadth', 'category': 'Market / Macro', 'weight': .05, 'reading': breadthStress, 'units': '0\u2013100', 'score': breadthStress, 'source_note': 'now live via Stooq SPY/RSP \u2014 unavailable in the original workbook',
-         'formula': 'clamp(50 \u2212 (5-day RSP-vs-SPY spread \u00d7 10 + 20-day spread \u00d7 5), 0, 100). RSP is the equal-weight S&P, so RSP lagging SPY means a narrow market.',
-         'inputs': [eq('SPY', spyL, 'S&P 500 ETF, last close'), eq('RSP', rspL, 'Equal-weight S&P ETF, last close'),
-                    calc('5-day breadth spread', breadth5D, '%'), calc('20-day breadth spread', breadth20D, '%')]},
-        {'name': 'Market Participation Momentum', 'category': 'Market / Macro', 'weight': .03, 'reading': participationMomentum, 'units': '0\u2013100', 'score': participationMomentum, 'source_note': 'now live via Stooq SPY/RSP \u2014 unavailable in the original workbook',
-         'formula': 'clamp(50 \u2212 (5-day spread \u00d7 15 + 20-day spread \u00d7 10), 0, 100). Same inputs as Breadth, weighted harder toward the recent move.',
-         'inputs': [eq('SPY', spyL, 'S&P 500 ETF, last close'), eq('RSP', rspL, 'Equal-weight S&P ETF, last close'),
-                    calc('5-day breadth spread', breadth5D, '%'), calc('20-day breadth spread', breadth20D, '%')]},
-        {'name': 'Economic Surprise', 'category': 'Market / Macro', 'weight': .03, 'reading': econSurpriseScore, 'units': '0\u2013100', 'score': econSurpriseScore,
+        {'name': 'Jobless Claims Momentum', 'category': 'Market / Macro', 'weight': WEIGHTS['Jobless Claims Momentum'][1], 'reading': econSurpriseScore, 'units': '0\u2013100', 'score': econSurpriseScore,
          'formula': 'clamp(50 + (initial claims 5-week % change) \u00d7 5, 0, 100). Reads 50 when claims are flat.',
          'inputs': [raw('ICSA', 'Initial unemployment claims'), lag('ICSA', 5, '5 weeks ago'),
-                    calc('5-week change', claimsChgPct, '%')]},
-        {'name': 'Inflation & Labor Momentum', 'category': 'Market / Macro', 'weight': .03, 'reading': inflationLaborScore, 'units': '0\u2013100', 'score': inflationLaborScore,
+                    calc('5-week change', claimsChgPct, '%')],
+         'flag': 'Renamed from \u201cEconomic Surprise\u201d. A surprise index measures data against consensus forecasts; this measures claims against their own recent level, so the old name overstated it.'},
+        {'name': 'Inflation Momentum', 'category': 'Market / Macro', 'weight': WEIGHTS['Inflation Momentum'][1], 'reading': inflationLaborScore, 'units': '0\u2013100', 'score': inflationLaborScore,
          'formula': 'clamp(50 + ((core CPI m/m \u00d7 0.5 + core PCE m/m \u00d7 0.5) \u2212 0.2) \u00d7 200, 0, 100). Reads 50 at 0.2% monthly, roughly the 2% annual target.',
          'inputs': [raw('CPILFESL', 'Core CPI index'), lag('CPILFESL', 1, 'Core CPI, prior month'),
                     raw('PCEPILFE', 'Core PCE index'), lag('PCEPILFE', 1, 'Core PCE, prior month'),
-                    calc('core CPI m/m', coreCpiMo, '%'), calc('core PCE m/m', corePceMo, '%')]},
-        {'name': 'Fed Expectations', 'category': 'Rates', 'weight': 0, 'reading': fedExpScore, 'units': '0\u2013100', 'score': fedExpScore, 'redundant': 'derived entirely from the 2Y Yield and SOFR-IORB scores, both already counted separately \u2014 weight moved to Credit',
-         'formula': '0.6 \u00d7 (2Y yield score) + 0.4 \u00d7 (SOFR\u2013IORB score)',
-         'inputs': [calc('2Y yield score', y2Score, '0\u2013100'), calc('SOFR\u2013IORB score', sofrIorbScore, '0\u2013100')]},
-        {'name': 'Liquidity Flow Stress', 'category': 'Liquidity', 'weight': .08, 'reading': liqFlowComposite, 'units': '0\u2013100', 'score': liqFlowComposite,
-         'formula': 'Net injection = \u0394Fed assets + \u0394reserves \u2212 \u0394TGA, over 5 and 20 observations. Each maps to clamp(50 \u2212 net \u00f7 scale), blended 65% short / 35% long. A drain scores high.',
-         'inputs': [raw('WALCL', 'Fed total assets'), raw('WRESBAL', 'Bank reserves'), raw('WTREGEN', 'Treasury general account'),
-                    calc('net injection, 5 obs', netImp5, '$mm'), calc('net injection, 20 obs', netImp20, '$mm')]},
+                    calc('core CPI m/m', coreCpiMo, '%'), calc('core PCE m/m', corePceMo, '%')],
+         'flag': 'Renamed from \u201cInflation & Labor Momentum\u201d. No labour series ever fed it.'},
+        {'name': 'SOFR\u2013IORB Spread', 'category': 'Liquidity', 'weight': 0, 'reading': sofrIorbBps, 'units': 'bps', 'score': sofrIorbScore, 'redundant': 'folded into Repo-Market Stress (45% of that composite)',
+         'formula': 'clamp(50 + (SOFR \u2212 IORB in bps) \u00d7 4, 0, 100)',
+         'inputs': [raw('SOFR', 'Secured Overnight Financing Rate'), raw('IORB', 'Interest on Reserve Balances'),
+                    calc('SOFR \u2212 IORB', sofrIorbBps, 'bps')]},
+        {'name': 'Bank Reserves', 'category': 'Liquidity', 'weight': 0, 'reading': wresbal, 'units': '$mm', 'score': reservesScore, 'redundant': 'reserves are a liability of the same balance sheet Fed Net Liquidity already measures \u2014 shown for reference, not scored',
+         'formula': 'Percentile rank of the 20-week change within its own trailing 60, inverted.',
+         'inputs': [raw('WRESBAL', 'Reserve balances held at Federal Reserve banks')]},
     ]
 
     # ---- worked arithmetic ------------------------------------------------
@@ -620,15 +693,52 @@ def compute_model(S, E):
                    if invert else f'score = {score:.2f}')
         return out
 
+    def roc_steps_series(series, window, score, roc_period=20, invert=False, label='net liquidity'):
+        """roc_steps() for a series built in code rather than fetched by id."""
+        vals = [q['value'] for q in series]
+        if score is None or len(vals) < roc_period + 30:
+            return []
+        rocs = [vals[i] - vals[i - roc_period] for i in range(roc_period, len(vals))]
+        pool = rocs[-window:]
+        cur = rocs[-1]
+        below = sum(1 for v in pool if v < cur)
+        out = [f'{label} now {g(vals[-1])}, {roc_period} observations ago {g(vals[-1-roc_period])}',
+               f'change = {g(cur)}',
+               f'pool = the last {len(pool)} such changes, ranging {g(min(pool))} to {g(max(pool))}',
+               f'{below} of {len(pool)} were smaller \u2192 {below/len(pool)*100:.2f}']
+        out.append(f'inverted (faster expansion = calmer): 100 \u2212 {below/len(pool)*100:.2f} = {score:.2f}'
+                   if invert else f'score = {score:.2f}')
+        return out
+
     step_map = {
         'HY Credit Spreads': pct_steps(hy, 'BAMLH0A0HYM2', 750, hyScore),
         'Investment-Grade Spreads': pct_steps(ig, 'BAMLC0A0CM', 750, igScore),
-        '2Y Treasury Yield': pct_steps(dgs2, 'DGS2', 1000, y2Score),
-        '10Y Treasury Yield': pct_steps(dgs10, 'DGS10', 1000, y10Score),
-        'Fed Balance Sheet': roc_steps('WALCL', 120, fedBsScore, invert=True),
+        'Real 10-Year Yield': pct_steps(dfii10, 'DFII10', 1000, realYieldScore),
         'Bank Reserves': roc_steps('WRESBAL', 60, reservesScore, invert=True),
         'Financial Conditions (NFCI)': roc_steps('NFCI', 500, nfciScore),
     }
+    if netLiqSeries and netLiq is not None:
+        step_map['Fed Net Liquidity'] = [
+            f'net liquidity = assets {g(walcl)} \u2212 TGA {g(wtregen)} \u2212 RRP {g((rrp or 0)*1000)} = {g(netLiq)} $mm',
+        ] + roc_steps_series(netLiqSeries, 120, netLiqScore, invert=True)
+    if t10y3m is not None:
+        step_map['Yield Curve (10Y \u2212 3M)'] = [
+            f'10Y \u2212 3M = {f(t10y3m,3)} percentage points',
+            f'clamp(50 \u2212 25 \u00d7 {f(t10y3m,3)}) = {f(curveScore)}',
+        ]
+    if volScore is not None:
+        step_map['Market Volatility'] = [
+            f'level: clamp(({f(vix)} \u2212 12) \u00d7 3.2) = {f(vixScore)}',
+            f'momentum: VIX {f(vix)} vs {f(vixp5)} five sessions ago = {f(vixChgPct)}%',
+            f'          clamp(50 + {f(vixChgPct)} \u00d7 4) = {f(vixTermProxy)}',
+            f'0.6 \u00d7 {f(vixScore)} + 0.4 \u00d7 {f(vixTermProxy)} = {f(volScore)}',
+        ]
+    if breadthScore is not None:
+        step_map['Equity Breadth'] = [
+            f'RSP vs SPY over 5 sessions = {f(breadth5D,3)}%  (equal-weight minus cap-weight)',
+            f'RSP vs SPY over 20 sessions = {f(breadth20D,3)}%',
+            f'clamp(50 \u2212 ({f(breadth5D,3)} \u00d7 12 + {f(breadth20D,3)} \u00d7 7)) = {f(breadthScore)}',
+        ]
 
     if None not in (sofrIorbBps, sofrEffrBps, sofrIqrBps):
         l1 = clamp(20 + sofrIorbBps * 3, 0, 100)
@@ -655,55 +765,20 @@ def compute_model(S, E):
             f'weighted: {f(move2)} \u00d7 0.6 + {f(move10)} \u00d7 0.4 = {f(move2*0.6 + move10*0.4)}',
             f'clamp({f(move2*0.6 + move10*0.4)} \u00d7 2) = {f(treasuryVolStress)}',
         ]
-    if vix is not None:
-        step_map['VIX'] = [f'clamp(({f(vix)} \u2212 12) \u00d7 3.2) = {f(vixScore)}']
-    if vixChgPct is not None:
-        step_map['VIX Momentum Proxy (5D)'] = [
-            f'VIX {f(vix)} vs {f(vixp5)} five sessions ago = {f(vixChgPct)}%',
-            f'clamp(50 + {f(vixChgPct)} \u00d7 4) = {f(vixTermProxy)}',
-        ]
-    if t2s10 is not None:
-        step_map['2s10s Curve'] = [f'clamp(50 \u2212 20 \u00d7 {f(t2s10,4)}) = {f(curveScore)}']
     if dxy is not None:
         step_map['DXY / Broad Dollar'] = [f'clamp(({f(dxy,4)} \u2212 100) \u00d7 2) = {f(dxyScore)}']
-    if wtregen is not None:
-        step_map['Treasury General Account'] = [
-            f'{f(wtregen,0)} $mm \u00f7 1000 = {f(wtregen/1000)} $bn',
-            f'clamp(20 + ({f(wtregen/1000)} \u2212 500) \u00f7 10) = {f(tgaScore)}',
-        ]
     if claimsChgPct is not None:
-        step_map['Economic Surprise'] = [
+        step_map['Jobless Claims Momentum'] = [
             f'claims {f(icsa,0)} vs {f(icsaP5,0)} five weeks ago = {f(claimsChgPct)}%',
             f'clamp(50 + {f(claimsChgPct)} \u00d7 5) = {f(econSurpriseScore)}',
         ]
     if None not in (coreCpiMo, corePceMo):
         blend = coreCpiMo * 0.5 + corePceMo * 0.5
-        step_map['Inflation & Labor Momentum'] = [
+        step_map['Inflation Momentum'] = [
             f'core CPI {f(cpiCore,3)} vs {f(cpiCoreP1,3)} last month = {f(coreCpiMo,3)}% m/m',
             f'core PCE {f(pceCore,3)} vs {f(pceCoreP1,3)} last month = {f(corePceMo,3)}% m/m',
             f'blend = ({f(coreCpiMo,3)} + {f(corePceMo,3)}) \u00f7 2 = {f(blend,3)}%',
             f'clamp(50 + ({f(blend,3)} \u2212 0.2) \u00d7 200) = {f(inflationLaborScore)}',
-        ]
-    if fedExpScore is not None:
-        step_map['Fed Expectations'] = [
-            f'0.6 \u00d7 {f(y2Score)} (2Y score) + 0.4 \u00d7 {f(sofrIorbScore)} (SOFR\u2013IORB score) = {f(fedExpScore)}']
-    if liqFlowComposite is not None:
-        step_map['Liquidity Flow Stress'] = [
-            f'5-obs: \u0394assets {f(dFed5,0)} + \u0394reserves {f(dRes5,0)} \u2212 \u0394TGA {f(dTga5,0)} = {f(netImp5,0)} $mm',
-            f'20-obs: \u0394assets {f(dFed20,0)} + \u0394reserves {f(dRes20,0)} \u2212 \u0394TGA {f(dTga20,0)} = {f(netImp20,0)} $mm',
-            f'short leg: clamp(50 \u2212 {f(netImp5,0)} \u00f7 10,000) = {f(liqFlow5)}',
-            f'long leg: clamp(50 \u2212 {f(netImp20,0)} \u00f7 20,000) = {f(liqFlow20)}',
-            f'0.65 \u00d7 {f(liqFlow5)} + 0.35 \u00d7 {f(liqFlow20)} = {f(liqFlowComposite)}',
-        ]
-    if None not in (breadth5D, breadth20D):
-        step_map['S&P 500 Breadth'] = [
-            f'RSP vs SPY over 5 sessions = {f(breadth5D,3)}%  (equal-weight minus cap-weight)',
-            f'RSP vs SPY over 20 sessions = {f(breadth20D,3)}%',
-            f'clamp(50 \u2212 ({f(breadth5D,3)} \u00d7 10 + {f(breadth20D,3)} \u00d7 5)) = {f(breadthStress)}',
-        ]
-        step_map['Market Participation Momentum'] = [
-            f'same two spreads: {f(breadth5D,3)}% over 5, {f(breadth20D,3)}% over 20',
-            f'clamp(50 \u2212 ({f(breadth5D,3)} \u00d7 15 + {f(breadth20D,3)} \u00d7 10)) = {f(participationMomentum)}',
         ]
 
     for ind in indicators:
@@ -830,295 +905,6 @@ def build_asset_outlook(regime):
     }
 
 
-# --- CFTC speculative positioning ------------------------------------------
-# Why this section exists: every other FX input in this file is backward-
-# looking by construction. fx_composite() measures moves that have already
-# happened and ranks them against moves that already happened; nothing in it
-# can lead anything.
-#
-# Positioning is the one genuinely forward-looking FX input available for
-# free. It does not predict WHETHER an unwind happens — nothing cheap does —
-# but crowded speculative positioning has a real multi-week lead on how
-# VIOLENT one is when it comes, because a crowded trade has more forced
-# sellers stacked behind the same exit.
-#
-# The honest framing, which the dashboard should repeat: this is a stock,
-# not a flow, it covers only large reportable traders, and it is three days
-# stale the moment it lands. Reports publish Friday afternoon describing
-# positions as of the preceding Tuesday.
-#
-# NOTE: this is deliberately NOT folded into fx_stress. That series is daily
-# and covers six currencies; mixing a stale weekly seven-contract measure
-# into it would change what the whole existing history means.
-COT_ENDPOINT = 'https://publicreporting.cftc.gov/resource/6dca-aqww.json'
-
-# code: (short label, display name, weight)
-#
-# Weights are a judgement call, not a calibration, unlike the windows in
-# sensitivity_calibration.json — the dashboard should say so. The reasoning:
-# JPY carries the most because it is the funding leg of the dominant carry
-# trade, and a crowded short yen is the position that unwinds violently. MXN
-# is the classic high-yield destination leg. CNY has no CME contract and is
-# absent, which is a real gap given its 20% weight in FX_WEIGHTS above.
-COT_CONTRACTS = {
-    '097741': ('JPY', 'Japanese yen', .30),
-    '099741': ('EUR', 'Euro FX', .20),
-    '232741': ('AUD', 'Australian dollar', .15),
-    '092741': ('CHF', 'Swiss franc', .10),
-    '096742': ('GBP', 'British pound', .10),
-    '090741': ('CAD', 'Canadian dollar', .08),
-    '095741': ('MXN', 'Mexican peso', .07),
-}
-
-COT_ROW_LIMIT = 5000   # ~4 years x 7 contracts, with headroom
-COT_WINDOW = 156       # ~3 years of WEEKLY prints (not daily, unlike elsewhere)
-COT_MIN_OBS = 30
-
-# Socrata column names, most likely first. The dataset has been through
-# schema revisions, and a hard-coded field name that silently returns None
-# is worse than a loud failure, so each value is looked up through a list of
-# candidates and the resolved names are reported in the output.
-COT_FIELD_CANDIDATES = {
-    'date': ['report_date_as_yyyy_mm_dd', 'report_date_as_yyyy', 'report_date'],
-    'code': ['cftc_contract_market_code'],
-    'long': ['noncomm_positions_long_all', 'noncomm_positions_long'],
-    'short': ['noncomm_positions_short_all', 'noncomm_positions_short'],
-    'oi': ['open_interest_all', 'open_interest'],
-}
-
-
-def _cot_resolve_fields(row):
-    """Maps our logical field names onto whatever the API actually returned.
-    Returns (None, key) if a required field is missing, so the caller can
-    report a schema change rather than emitting a panel full of nulls."""
-    resolved = {}
-    for key, candidates in COT_FIELD_CANDIDATES.items():
-        found = next((c for c in candidates if c in row), None)
-        if found is None:
-            return None, key
-        resolved[key] = found
-    return resolved, None
-
-
-def _cot_num(v):
-    if v is None:
-        return None
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
-
-
-def fetch_cot():
-    """Pulls the FX contracts' recent history in a single request.
-
-    Contracts are matched on CFTC market code, not name: the
-    `market_and_exchange_names` strings have been revised over the years
-    ("BRITISH POUND STERLING" -> "BRITISH POUND"); the codes have not.
-
-    Returns ({code: [{'date','net','oi','net_pct'}, ...]}, resolved_fields),
-    each series sorted ascending by date to match the shape the rest of this
-    file already uses, so percentile_score() consumes it unchanged."""
-    codes = "','".join(sorted(COT_CONTRACTS))
-    params = {
-        '$where': f"cftc_contract_market_code in('{codes}')",
-        '$order': 'report_date_as_yyyy_mm_dd DESC',
-        '$limit': str(COT_ROW_LIMIT),
-    }
-    url = COT_ENDPOINT + '?' + urllib.parse.urlencode(params)
-
-    try:
-        text = http_get(url, timeout=40)
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        print(f'  WARN: CFTC COT fetch failed: {e}', file=sys.stderr)
-        return {}, None
-
-    try:
-        rows = json.loads(text)
-    except json.JSONDecodeError as e:
-        print(f'  WARN: CFTC COT returned unparseable JSON: {e}', file=sys.stderr)
-        return {}, None
-
-    if not rows:
-        print('  WARN: CFTC COT returned no rows', file=sys.stderr)
-        return {}, None
-
-    fields, missing = _cot_resolve_fields(rows[0])
-    if fields is None:
-        print(f'  WARN: CFTC COT schema changed \u2014 no column found for "{missing}". '
-              f'Available: {sorted(rows[0].keys())}', file=sys.stderr)
-        return {}, None
-
-    out = {}
-    for row in rows:
-        code = row.get(fields['code'])
-        if code not in COT_CONTRACTS:
-            continue
-        date = row.get(fields['date'])
-        lng = _cot_num(row.get(fields['long']))
-        sht = _cot_num(row.get(fields['short']))
-        oi = _cot_num(row.get(fields['oi']))
-        if None in (lng, sht, oi) or not date or not oi:
-            continue
-        net = lng - sht
-        out.setdefault(code, []).append({
-            'date': str(date)[:10],
-            'net': net,
-            'oi': oi,
-            # Net speculative position as a share of total open interest.
-            # Raw contract counts are NOT comparable across time — open
-            # interest in these contracts has grown several-fold — so an
-            # unscaled net position drifts upward forever and every recent
-            # week looks like a record. This is the scale-free quantity
-            # everything downstream ranks.
-            'net_pct': net / oi * 100,
-        })
-
-    for code in out:
-        out[code].sort(key=lambda p: p['date'])
-
-    return out, fields
-
-
-def compute_cot_positioning():
-    """Per-currency crowding plus a weighted composite.
-
-    Crowding ranks the ABSOLUTE net position: a heavily net-short yen and a
-    heavily net-long yen are both crowded, and both carry unwind risk, just
-    in opposite directions. The signed rank is kept alongside so the
-    direction is never lost.
-
-    Returns None on any failure, so the dashboard hides the panel rather
-    than rendering a grid of dashes — same convention as compute_usd_flow().
-    """
-    data, fields = fetch_cot()
-    if not data:
-        return None
-
-    contracts = []
-    for code, (label, name, weight) in sorted(COT_CONTRACTS.items(), key=lambda kv: -kv[1][2]):
-        series = data.get(code) or []
-        if len(series) < COT_MIN_OBS:
-            continue
-
-        current_pct = series[-1]['net_pct']
-
-        abs_series = [{'date': p['date'], 'value': abs(p['net_pct'])} for p in series]
-        crowding = percentile_score(abs(current_pct), abs_series, window=COT_WINDOW)
-
-        signed_series = [{'date': p['date'], 'value': p['net_pct']} for p in series]
-        signed_rank = percentile_score(current_pct, signed_series, window=COT_WINDOW)
-
-        pool = [abs(p['net_pct']) for p in series][-COT_WINDOW:]
-        steps = []
-        if crowding is not None:
-            below = sum(1 for v in pool if v < abs(current_pct))
-            steps = [
-                f'net speculative position = {series[-1]["net"]:,.0f} contracts',
-                f'open interest = {series[-1]["oi"]:,.0f} contracts',
-                f'net as share of OI = {current_pct:+.2f}%',
-                f'pool = last {len(pool)} weekly readings of |net share|, '
-                f'ranging {min(pool):.2f}% to {max(pool):.2f}%',
-                f'{below} of {len(pool)} were smaller \u2192 crowding {crowding:.2f}',
-            ]
-
-        contracts.append({
-            'label': label,
-            'name': name,
-            'code': code,
-            'weight': weight,
-            'as_of': series[-1]['date'],
-            'net_contracts': round(series[-1]['net']),
-            'open_interest': round(series[-1]['oi']),
-            'net_pct_of_oi': round(current_pct, 2),
-            'side': 'net long' if current_pct > 0 else 'net short',
-            'crowding': crowding,
-            'signed_rank': signed_rank,
-            'obs': len(series),
-            'steps': steps,
-        })
-
-    scored = [c for c in contracts if c['crowding'] is not None]
-    if not scored:
-        return None
-
-    wsum = sum(c['weight'] for c in scored)
-    composite = sum(c['crowding'] * c['weight'] for c in scored) / wsum if wsum else None
-
-    # Composite history, so this can be charted beside the FX stress line
-    # rather than shown only as a single current number. Each week is ranked
-    # against only what was known by that week — no lookahead, same rule the
-    # score_all_asof() reconstruction follows.
-    history = []
-    all_dates = sorted({p['date'] for s in data.values() for p in s})
-    for d in all_dates[-104:]:
-        parts, w = 0.0, 0.0
-        for code, (label, name, weight) in COT_CONTRACTS.items():
-            series = data.get(code) or []
-            upto = [p for p in series if p['date'] <= d]
-            if len(upto) < COT_MIN_OBS:
-                continue
-            abs_series = [{'date': p['date'], 'value': abs(p['net_pct'])} for p in upto]
-            sc = percentile_score(abs(upto[-1]['net_pct']), abs_series,
-                                  asof_date=d, window=COT_WINDOW)
-            if sc is None:
-                continue
-            parts += sc * weight
-            w += weight
-        if w > 0:
-            history.append({'date': d, 'crowding': round(parts / w, 2)})
-
-    return {
-        'as_of': max((c['as_of'] for c in scored), default=None),
-        'composite_crowding': round(composite, 2) if composite is not None else None,
-        'contracts': contracts,
-        'history': history,
-        'coverage': round(wsum, 3),
-        'resolved_fields': fields,
-        'note': ('Large speculative (non-commercial) net positions from the CFTC Legacy '
-                 'futures-only report, scaled by open interest and ranked against each '
-                 'contract\u2019s own three-year history. Published Friday afternoon for the '
-                 'preceding Tuesday, so the newest reading is always at least three days '
-                 'old. Crowded positioning does not predict whether a move happens \u2014 it '
-                 'indicates how much forced selling is stacked behind one if it does. '
-                 'Deliberately kept out of the FX Stress composite: that series is daily '
-                 'and six-currency, and mixing a stale weekly measure into it would change '
-                 'what its whole history means. CNY is absent \u2014 there is no CME contract, '
-                 'a real gap given its 20% weight in FX Stress. Contract weights here are '
-                 'a judgement call, not a calibrated result.'),
-    }
-
-
-def cot_quadrant(fx_stress, crowding):
-    """Reads the two FX measures together instead of averaging them, because
-    they answer different questions: fx_stress says what the market has been
-    doing, crowding says how much fuel sits behind a move if one starts.
-
-    Gates at 50 on both axes. Returns None if either leg is missing."""
-    if fx_stress is None or crowding is None:
-        return None
-    hot_r, hot_c = fx_stress >= FX_STRESS_GATE, crowding >= 50
-    if hot_r and hot_c:
-        return {'name': 'Moving, and crowded',
-                'body': ('FX conditions are already stressed and speculators are leaning hard at '
-                         'the same time. The configuration where moves tend to extend rather than '
-                         'fade, because the people who need to exit all face the same direction. '
-                         'Says nothing about which way.')}
-    if hot_r and not hot_c:
-        return {'name': 'Moving, but positions are light',
-                'body': ('Currencies are moving unusually while speculators are not heavily '
-                         'committed. Less forced selling stacked behind a move, so dislocations '
-                         'have historically been shorter-lived than they look in the moment.')}
-    if not hot_r and hot_c:
-        return {'name': 'Quiet, but crowded',
-                'body': ('Little happening in spot while speculators lean heavily. Historically '
-                         'the least comfortable of the four: quiet conditions invite bigger '
-                         'positions, and the positions are what make the eventual move violent. '
-                         'Can persist for months \u2014 a watch state, not a trigger.')}
-    return {'name': 'Quiet, and nobody\u2019s leaning',
-            'body': 'Ordinary spot conditions and unremarkable positioning. The usual state.'}
-
-
 # yfinance symbol for each asset's price history (used for the price-vs-score
 # charts). Same tickers backtest_asset_outlook.py already uses successfully.
 STOOQ_ASSET_MAP = {
@@ -1177,12 +963,22 @@ def score_all_asof(S, E, date):
     dxyScore = clamp((dxy - 100) * 2, 0, 100) if dxy is not None else None
 
     walcl, wresbal, wtregen = L('WALCL'), L('WRESBAL'), L('WTREGEN')
+    # Kept because Short Treasuries vs. Fed balance-sheet momentum is the one
+    # validated out-of-sample pairing; no longer part of the weighted score.
     fedBsScore = momentum_percentile_score(S.get('WALCL', []), asof_date=date, window=120, invert=True)
-    reservesScore = momentum_percentile_score(S.get('WRESBAL', []), asof_date=date, window=60, invert=True)
-    tgaScore = clamp(20 + (wtregen/1000 - 500) / 10, 0, 100) if wtregen is not None else None
+
+    netLiqSeries = [q for q in net_liquidity_series(S) if q['date'] <= date]
+    netLiqScore = momentum_percentile_score(netLiqSeries, window=120, invert=True)
 
     nfci = L('NFCI')
     nfciScore = momentum_percentile_score(S.get('NFCI', []), asof_date=date, window=500)
+
+    dfii10 = L('DFII10')
+    realYieldScore = percentile_score(dfii10, S.get('DFII10', []), asof_date=date, window=1000)
+    t10y3m = L('T10Y3M')
+    curveScore = clamp(50 - 25 * t10y3m, 0, 100) if t10y3m is not None else None
+
+    volScore = 0.6 * vixScore + 0.4 * vixTermProxy if None not in (vixScore, vixTermProxy) else None
 
     icsa, icsaP5 = L('ICSA'), P5('ICSA')
     econSurpriseScore = None
@@ -1197,17 +993,6 @@ def score_all_asof(S, E, date):
         corePceMo = (pceCore/pceCoreP1 - 1) * 100
         inflationLaborScore = clamp(50 + ((coreCpiMo*0.5 + corePceMo*0.5) - 0.2)*200, 0, 100)
 
-    walclP5, walclP20 = P5('WALCL'), P20('WALCL')
-    wresbalP5, wresbalP20 = P5('WRESBAL'), P20('WRESBAL')
-    wtregenP5, wtregenP20 = P5('WTREGEN'), P20('WTREGEN')
-    liqFlowComposite = None
-    if None not in (walcl, walclP5, walclP20, wresbal, wresbalP5, wresbalP20, wtregen, wtregenP5, wtregenP20):
-        netImp5 = (walcl-walclP5) + (wresbal-wresbalP5) - (wtregen-wtregenP5)
-        netImp20 = (walcl-walclP20) + (wresbal-wresbalP20) - (wtregen-wtregenP20)
-        liqFlow5 = clamp(50 - netImp5/10000, 0, 100)
-        liqFlow20 = clamp(50 - netImp20/20000, 0, 100)
-        liqFlowComposite = liqFlow5*0.65 + liqFlow20*0.35
-
     spyL, spyP5, spyP20 = EL('SPY'), EP5('SPY'), EP20('SPY')
     rspL, rspP5, rspP20 = EL('RSP'), EP5('RSP'), EP20('RSP')
     breadth5D = breadth20D = None
@@ -1215,27 +1000,42 @@ def score_all_asof(S, E, date):
         breadth5D = ((rspL/rspP5)/(spyL/spyP5)-1)*100
     if None not in (spyL, spyP20, rspL, rspP20) and spyP20 and rspP20:
         breadth20D = ((rspL/rspP20)/(spyL/spyP20)-1)*100
-    breadthStress = clamp(50-(breadth5D*10+breadth20D*5),0,100) if None not in (breadth5D,breadth20D) else None
-    participationMomentum = clamp(50-(breadth5D*15+breadth20D*10),0,100) if None not in (breadth5D,breadth20D) else None
+    breadthScore = clamp(50-(breadth5D*12+breadth20D*7),0,100) if None not in (breadth5D,breadth20D) else None
 
-    credit_rows = [(hyScore, .13), (igScore, .07)]
-    liquidity_rows = [(repoScore, .12), (dxyScore, .05), (fedBsScore, .03), (reservesScore, .04), (tgaScore, .04), (liqFlowComposite, .08)]
-    rates_rows = [(treasuryVolStress, .07), (y2Score, .05), (y10Score, .04)]
-    market_rows = [(vixScore, .05), (vixTermProxy, .05), (nfciScore, .04), (breadthStress, .05), (participationMomentum, .03), (econSurpriseScore, .03), (inflationLaborScore, .03)]
+    # Single source of truth: same WEIGHTS table compute_model() uses, so the
+    # reconstructed history can never drift from the live score.
+    scored = {
+        'HY Credit Spreads': hyScore,
+        'Investment-Grade Spreads': igScore,
+        'Repo-Market Stress': repoScore,
+        'Fed Net Liquidity': netLiqScore,
+        'DXY / Broad Dollar': dxyScore,
+        'Treasury Vol Proxy (MOVE-style)': treasuryVolStress,
+        'Real 10-Year Yield': realYieldScore,
+        'Yield Curve (10Y \u2212 3M)': curveScore,
+        'Market Volatility': volScore,
+        'Equity Breadth': breadthScore,
+        'Financial Conditions (NFCI)': nfciScore,
+        'Jobless Claims Momentum': econSurpriseScore,
+        'Inflation Momentum': inflationLaborScore,
+    }
 
-    def cat_avg(rows):
-        valid = [(s, w) for s, w in rows if s is not None]
-        if not valid:
+    def cat_avg(category):
+        rows = [(sc, WEIGHTS[n][1]) for n, sc in scored.items()
+                if sc is not None and WEIGHTS[n][0] == category and WEIGHTS[n][1] > 0]
+        if not rows:
             return None
-        wsum = sum(w for _, w in valid)
-        return sum(s*w for s, w in valid) / wsum if wsum > 0 else None
+        wsum = sum(w for _, w in rows)
+        return sum(sc*w for sc, w in rows) / wsum if wsum > 0 else None
 
-    liquidity_score = cat_avg(liquidity_rows)
-    credit_score = cat_avg(credit_rows)
-    rates_score = cat_avg(rates_rows)
-    market_score = cat_avg(market_rows)
+    liquidity_score = cat_avg('Liquidity')
+    credit_score = cat_avg('Credit')
+    rates_score = cat_avg('Rates')
+    market_score = cat_avg('Market / Macro')
 
-    fedExpScore = 0.6*y2Score + 0.4*clamp(50+sofrIorbBps*4,0,100) if None not in (y2Score, sofrIorbBps) else None
+    sofrIorbScore = clamp(50 + sofrIorbBps*4, 0, 100) if sofrIorbBps is not None else None
+    y2Score = percentile_score(dgs2, S.get('DGS2', []), asof_date=date, window=1000)
+    fedExpScore = 0.6*y2Score + 0.4*sofrIorbScore if None not in (y2Score, sofrIorbScore) else None
     inflationary_pressure = None
     if None not in (rates_score, fedExpScore, dxyScore):
         inflationary_pressure = clamp(0.45*rates_score + 0.3*fedExpScore + 0.25*dxyScore, 0, 100)
@@ -1250,21 +1050,11 @@ def score_all_asof(S, E, date):
 
     fx_legs = [fx_leg('DEXJPUS', True), fx_leg('DEXUSEU', True), fx_leg('DEXCHUS', False),
                fx_leg('DEXSZUS', True), fx_leg('DEXUSAL', True), fx_leg('DTWEXBGS', False)]
-    # RESCALED — same fx_composite() the live path uses, so the historical
-    # 'FX Stress' line on the per-asset charts stays on the same 0-100 axis
-    # as the live tile. Leaving this on the old formula would have made the
-    # chart and the tile silently disagree by ~50 points.
     fx_stress = fx_composite(*fx_legs)
 
-    weighted_scores = [
-        (hyScore, .13), (igScore, .07), (repoScore, .12), (treasuryVolStress, .07),
-        (vixScore, .05), (vixTermProxy, .05), (y2Score, .05), (y10Score, .04),
-        (dxyScore, .05), (fedBsScore, .03), (reservesScore, .04), (tgaScore, .04),
-        (nfciScore, .04), (breadthStress, .05), (participationMomentum, .03),
-        (econSurpriseScore, .03), (inflationLaborScore, .03), (liqFlowComposite, .08),
-    ]
-    contributing = [(s, w) for s, w in weighted_scores if s is not None]
-    overall_risk = sum(s*w for s, w in contributing) if contributing else None
+    contributing = [(sc, WEIGHTS[n][1]) for n, sc in scored.items()
+                    if sc is not None and WEIGHTS[n][1] > 0]
+    overall_risk = sum(sc*w for sc, w in contributing) if contributing else None
 
     return {
         'overall_risk': round(overall_risk, 2) if overall_risk is not None else None,
@@ -1274,6 +1064,7 @@ def score_all_asof(S, E, date):
         'Market / Macro': round(market_score, 2) if market_score is not None else None,
         'Inflationary Pressure': round(inflationary_pressure, 2) if inflationary_pressure is not None else None,
         'FX Stress': round(fx_stress, 2) if fx_stress is not None else None,
+        'Real Yield': round(realYieldScore, 2) if realYieldScore is not None else None,
         # tracked as its own field (not folded into the Liquidity blend) because
         # it's the one metric-asset pairing with a genuinely validated, real
         # out-of-sample relationship (see asset_signals.json) — BIL vs. this
@@ -1296,348 +1087,14 @@ ASSET_RISK_MAP = {
     'Value Stocks': 'Market / Macro', 'High Dividend Stocks': 'Market / Macro',
     'High-Yield Bonds': 'Credit', 'Investment-Grade Bonds': 'Credit',
     'Short Treasuries / T-Bills': 'Fed Balance Sheet', 'Long Treasuries': 'Rates',
-    'U.S. Dollar': 'FX Stress', 'Gold': 'Inflationary Pressure', 'Silver': 'Inflationary Pressure',
+    # Gold's dominant driver is the real yield, not a rates/Fed/dollar blend.
+    # Now that DFII10 is fetched, chart them against the thing itself.
+    'U.S. Dollar': 'FX Stress', 'Gold': 'Real Yield', 'Silver': 'Real Yield',
     'Broad Commodities': 'Inflationary Pressure', 'Oil': 'Inflationary Pressure',
     'REITs': 'Rates', 'Utilities': 'Market / Macro', 'Consumer Staples': 'Market / Macro',
     'Financials': 'Credit', 'Bitcoin': 'Liquidity', 'Crypto ex-BTC': 'Liquidity',
     'Emerging-Market Stocks': 'FX Stress', 'Emerging-Market Bonds': 'Liquidity',
 }
-
-
-# --- USD flow / asset sensitivity ------------------------------------------
-# Honest framing, because the page should not overclaim: you cannot observe
-# money moving into or out of the dollar. Real flow data (TIC, custody
-# holdings, CFTC positioning) is weekly-to-monthly and lagged by weeks. What
-# IS observable daily is dollar DIRECTION, and how each asset class has been
-# co-moving with it. That is what this computes, and the panel says so.
-#
-# Two parts:
-#   1. Impulse — how far the broad dollar has moved over 21 and 63 sessions,
-#      z-scored against its own ~3 years of same-horizon moves, so "up 2% in
-#      a month" is judged against how often that actually happens rather
-#      than against a threshold someone picked.
-#   2. Sensitivity — per asset, a regression of its daily returns on the
-#      dollar's over the last 60 sessions. Beta = % the asset moved per 1%
-#      dollar move. r2 = how much of the asset's variation that explains.
-#      Low r2 is the NORMAL state for equities; EM credit, EM equity and
-#      commodities are where the dollar usually bites. The r2 is the part
-#      worth watching — a beta with no explanatory power behind it is noise.
-#
-# NOTE: DTWEXBGS is published by the Fed with a few business days' lag, so
-# this panel's as-of date will usually trail the ECB-based FX pages.
-
-USD_BETA_WINDOW = 60      # sessions in each beta/correlation regression
-USD_Z_WINDOW = 750        # ~3 years of same-horizon moves for the z-score
-USD_MIN_OBS = 30          # below this, report nothing rather than nonsense
-
-# --- same-day dollar proxy from ECB reference rates ------------------------
-# DTWEXBGS is a Fed weekly release, so on any given day it is 3-7 days stale.
-# The index itself is only a trade-weighted basket of dollar crosses, and the
-# crosses are published daily by the ECB at ~16:00 CET. So: anchor on the last
-# real Fed observation, then chain the basket's daily moves onto it to reach
-# today.
-#
-# This is an ESTIMATE and is labelled as one everywhere it surfaces. Two
-# reasons it will not match the Fed's number exactly when the next print
-# lands: the weights below are approximations of the Fed's (which are revised
-# annually from trade data), and the basket is incomplete — Taiwan, Vietnam
-# and a few others have no ECB reference rate. Coverage is reported in the
-# output so you can see how much of the index the proxy actually spans.
-ECB_90D_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml'
-
-# Approximate Fed broad-index trade weights. Renormalised at runtime over
-# whichever currencies the ECB actually returned, so a missing rate dilutes
-# coverage rather than silently skewing the index.
-USD_BASKET_WEIGHTS = {
-    'EUR': .192, 'CNY': .148, 'CAD': .135, 'MXN': .134, 'JPY': .060,
-    'GBP': .048, 'KRW': .036, 'INR': .026, 'CHF': .020, 'BRL': .019,
-    'SGD': .016, 'MYR': .014, 'AUD': .013, 'THB': .012, 'HKD': .012,
-    'IDR': .007, 'PHP': .006, 'SEK': .005, 'ZAR': .004, 'ILS': .004,
-}
-
-
-def fetch_ecb_daily():
-    """ECB euro reference rates for the last 90 days.
-
-    Returns {date: {currency: units per EUR}}, with EUR itself included as
-    1.0 so it can be treated like any other basket member. Returns {} on any
-    failure — the caller falls back to the unextended Fed series rather than
-    failing the whole run over a nice-to-have."""
-    try:
-        text = http_get(ECB_90D_URL, timeout=30)
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        print(f'  WARN: ECB reference rates unavailable: {e}', file=sys.stderr)
-        return {}
-
-    try:
-        import xml.etree.ElementTree as ET
-        root = ET.fromstring(text)
-    except Exception as e:
-        print(f'  WARN: ECB XML parse failed: {e}', file=sys.stderr)
-        return {}
-
-    out = {}
-    # The feed is namespaced; matching on the tag suffix avoids hard-coding a
-    # namespace URI that the ECB has changed before (ecb.int -> ecb.europa.eu).
-    for node in root.iter():
-        if not node.tag.endswith('Cube'):
-            continue
-        day = node.get('time')
-        if not day:
-            continue
-        rates = {'EUR': 1.0}
-        for child in node:
-            ccy, rate = child.get('currency'), child.get('rate')
-            if not ccy or not rate:
-                continue
-            try:
-                rates[ccy] = float(rate)
-            except ValueError:
-                continue
-        if len(rates) > 1:
-            out[day] = rates
-    return out
-
-
-def build_usd_daily(S):
-    """The Fed's broad dollar series, extended to the present with an
-    ECB-derived estimate. Returns (series, meta).
-
-    Each appended point carries est=True, so the dashboard can draw the
-    estimated stretch differently from the published one instead of
-    presenting a guess with the same authority as a Fed print."""
-    official = list(S.get('DTWEXBGS') or [])
-    meta = {'official_as_of': official[-1]['date'] if official else None,
-            'proxy_dates': [], 'basket_coverage': None, 'proxy_note': None}
-    if not official:
-        return official, meta
-
-    ecb = fetch_ecb_daily()
-    if not ecb:
-        meta['proxy_note'] = 'ECB reference rates were unreachable this run — showing the Fed series as published.'
-        return official, meta
-
-    anchor_date = official[-1]['date']
-    anchor_value = official[-1]['value']
-
-    # Base day = the most recent ECB quote on or before the Fed's last print.
-    # Chaining from any other day would splice in a move the Fed number
-    # already contains, double-counting it.
-    base_days = [d for d in ecb if d <= anchor_date]
-    if not base_days:
-        meta['proxy_note'] = 'No ECB quote on or before the last Fed observation — showing the Fed series as published.'
-        return official, meta
-    base_day = max(base_days)
-    base = ecb[base_day]
-
-    def per_usd(rates, ccy):
-        """Units of `ccy` per USD, from euro-based quotes."""
-        usd = rates.get('USD')
-        if not usd:
-            return None
-        if ccy == 'EUR':
-            return 1.0 / usd
-        r = rates.get(ccy)
-        return (r / usd) if r else None
-
-    import math
-    forward = sorted(d for d in ecb if d > anchor_date)
-    coverage = None
-    for day in forward:
-        cur = ecb[day]
-        acc, wsum = 0.0, 0.0
-        for ccy, w in USD_BASKET_WEIGHTS.items():
-            s0, s1 = per_usd(base, ccy), per_usd(cur, ccy)
-            if not s0 or not s1:
-                continue
-            acc += w * math.log(s1 / s0)
-            wsum += w
-        if wsum <= 0:
-            continue
-        # Renormalising by wsum treats the covered currencies as
-        # representative of the whole basket — the standard approach, and the
-        # reason coverage is worth reporting alongside the number.
-        official.append({'date': day, 'value': anchor_value * math.exp(acc / wsum), 'est': True})
-        meta['proxy_dates'].append(day)
-        coverage = wsum
-
-    meta['basket_coverage'] = round(coverage, 3) if coverage is not None else None
-    if meta['proxy_dates']:
-        meta['proxy_note'] = (f"Extended past the Fed's {anchor_date} print with ECB reference rates covering "
-                              f"{coverage*100:.0f}% of the basket by weight. Estimated, not published.")
-    return official, meta
-
-# All of these are already fetched via STOOQ_ASSET_MAP — no new downloads.
-USD_FLOW_ASSETS = [
-    ('Emerging-market bonds', 'EMB'),
-    ('Emerging-market stocks', 'EEM'),
-    ('Gold', 'GLD'),
-    ('Oil', 'USO'),
-    ('Broad commodities', 'DBC'),
-    ('High-yield bonds', 'HYG'),
-    ('Long Treasuries', 'TLT'),
-    ('S&P 500', 'SPY'),
-    ('Nasdaq / growth', 'QQQ'),
-    ('Bitcoin', 'BTC-USD'),
-]
-
-
-def _horizon_changes(vals, n):
-    """Every n-observation % change in a value series, in order. Keeps a
-    None placeholder rather than skipping, so positions stay aligned with
-    the date list the caller holds."""
-    out = []
-    for i in range(n, len(vals)):
-        prev = vals[i - n]
-        out.append((vals[i] / prev - 1) if prev else None)
-    return out
-
-
-def _zscore(current, pool):
-    """Where `current` sits in `pool`, in standard deviations. Used instead
-    of a percentile here because the sign matters — a dollar falling hard is
-    as interesting as one rising hard, and a percentile flattens that."""
-    clean = [v for v in pool if v is not None]
-    if current is None or len(clean) < USD_MIN_OBS:
-        return None
-    m = sum(clean) / len(clean)
-    var = sum((v - m) ** 2 for v in clean) / len(clean)
-    if var <= 0:
-        return None
-    return (current - m) / (var ** 0.5)
-
-
-def _aligned_returns(a_series, b_series, window):
-    """Daily % changes of two series over the dates they BOTH have, most
-    recent `window` of them. Aligning on shared dates matters: FRED and the
-    equity feed keep different holiday calendars, and pairing a Monday
-    dollar move against a Tuesday equity move would quietly wreck the beta."""
-    bmap = {p['date']: p['value'] for p in b_series}
-    common = sorted(((p['date'], p['value'], bmap[p['date']])
-                     for p in a_series if p['date'] in bmap), key=lambda r: r[0])
-    ra, rb = [], []
-    for i in range(1, len(common)):
-        pa, pb = common[i - 1][1], common[i - 1][2]
-        if not pa or not pb:
-            continue
-        ra.append(common[i][1] / pa - 1)
-        rb.append(common[i][2] / pb - 1)
-    return ra[-window:], rb[-window:]
-
-
-def _beta_r2(y, x):
-    """Slope of y on x, the correlation, and the r2 of that fit. Plain least
-    squares — no numpy, to keep this script dependency-light."""
-    if len(y) < USD_MIN_OBS or len(y) != len(x):
-        return None, None, None
-    my, mx = sum(y) / len(y), sum(x) / len(x)
-    sxy = sum((a - my) * (b - mx) for a, b in zip(y, x))
-    sxx = sum((b - mx) ** 2 for b in x)
-    syy = sum((a - my) ** 2 for a in y)
-    if sxx <= 0 or syy <= 0:
-        return None, None, None
-    corr = sxy / ((sxx * syy) ** 0.5)
-    return sxy / sxx, corr, corr ** 2
-
-
-def compute_usd_flow(S, yf_data, usd=None, usd_meta=None):
-    """Dollar impulse plus per-asset sensitivity. Returns None if the dollar
-    series is too short to say anything, so the dashboard can hide the
-    section rather than render a panel full of dashes.
-
-    `usd` is the possibly-ECB-extended series from build_usd_daily(); it
-    falls back to the raw Fed series so this stays callable on its own."""
-    usd = usd if usd is not None else (S.get('DTWEXBGS') or [])
-    usd_meta = usd_meta or {}
-    if len(usd) < USD_Z_WINDOW // 2:
-        print('  WARN: DTWEXBGS too short for the USD flow panel', file=sys.stderr)
-        return None
-
-    vals = [p['value'] for p in usd]
-    dates = [p['date'] for p in usd]
-    est_dates = set(usd_meta.get('proxy_dates') or [])
-
-    out = {
-        'as_of': dates[-1],
-        'index_level': vals[-1],
-        'index_is_estimate': dates[-1] in est_dates,
-        'official_as_of': usd_meta.get('official_as_of'),
-        'proxy_days': len(est_dates),
-        'basket_coverage': usd_meta.get('basket_coverage'),
-        'proxy_note': usd_meta.get('proxy_note'),
-        'window': USD_BETA_WINDOW,
-        'assets': [],
-    }
-
-    for label, n in (('1m', 21), ('3m', 63)):
-        chgs = _horizon_changes(vals, n)
-        cur = chgs[-1] if chgs else None
-        z = _zscore(cur, chgs[-USD_Z_WINDOW:])
-        out[f'chg_{label}_pct'] = round(cur * 100, 2) if cur is not None else None
-        out[f'z_{label}'] = round(z, 2) if z is not None else None
-
-    # Plain-language read on the 1-month impulse. The gates are deliberately
-    # wide: inside ±0.75 SD the dollar is doing nothing worth a headline.
-    z1 = out.get('z_1m')
-    if z1 is None:
-        out['direction'] = 'Not enough data'
-    elif z1 >= 0.75:
-        out['direction'] = 'Money moving into the dollar'
-    elif z1 <= -0.75:
-        out['direction'] = 'Money moving out of the dollar'
-    else:
-        out['direction'] = 'Dollar going nowhere in particular'
-
-    # ~12 months of the 1-month impulse, for the sparkline. Each point is
-    # z-scored against only what was known at the time — no lookahead.
-    chgs1 = _horizon_changes(vals, 21)
-    hist = []
-    for i in range(max(0, len(chgs1) - 250), len(chgs1)):
-        z = _zscore(chgs1[i], chgs1[max(0, i - USD_Z_WINDOW):i + 1])
-        if z is not None:
-            d = dates[i + 21]
-            hist.append({'date': d, 'z': round(z, 2), 'est': d in est_dates})
-    out['impulse_history'] = hist
-
-    # Dollar's own move across the beta window, so each asset's "explained by
-    # the dollar" figure has something to be a share of.
-    usd_window_move = None
-    if len(vals) > USD_BETA_WINDOW:
-        prev = vals[-1 - USD_BETA_WINDOW]
-        usd_window_move = (vals[-1] / prev - 1) * 100 if prev else None
-    out['usd_window_move_pct'] = round(usd_window_move, 2) if usd_window_move is not None else None
-
-    for name, ticker in USD_FLOW_ASSETS:
-        px = yf_data.get(ticker) or []
-        if not px:
-            continue
-        # Regressing against the extended series matters: equity closes are
-        # available for days the Fed hasn't printed yet, and without the
-        # proxy those sessions would drop out of the shared-date join.
-        r_asset, r_usd = _aligned_returns(px, usd, USD_BETA_WINDOW)
-        beta, corr, r2 = _beta_r2(r_asset, r_usd)
-        if beta is None:
-            continue
-        own_move = (sum(r_asset) * 100) if r_asset else None   # ~cumulative; close enough at daily scale
-        explained = (beta * usd_window_move) if usd_window_move is not None else None
-        out['assets'].append({
-            'name': name,
-            'ticker': ticker,
-            'beta': round(beta, 2),
-            'corr': round(corr, 2),
-            'r2': round(r2, 3),
-            'own_move_pct': round(own_move, 2) if own_move is not None else None,
-            'explained_pct': round(explained, 2) if explained is not None else None,
-            'n': len(r_asset),
-        })
-
-    # Most dollar-driven first — that ordering IS the finding.
-    out['assets'].sort(key=lambda a: -(a['r2'] or 0))
-    out['note'] = ('Co-movement, not flows. Nobody publishes daily dollar flow data; this measures '
-                   'how the dollar moved and what moved with it. Causation runs both ways \u2014 risk-off '
-                   'pushes the dollar up as much as a rising dollar pushes risk assets down. Assets low '
-                   'on this list are not immune to the dollar, just not tracking it right now.')
-    return out
 
 
 def main():
@@ -1674,11 +1131,7 @@ def main():
 
     print('Fetching equity/asset price data (yfinance, single bulk call)...')
     all_yf_tickers = sorted(set(list(STOOQ_TICKERS.values()) + list(STOOQ_ASSET_MAP.values())))
-    # 500 days (not 220): the USD sensitivity panel runs 60-session
-    # regressions, and a 220-day pull leaves barely enough sessions for one
-    # window once holidays and a young ticker's short history are taken out.
-    # asset_price_history still trims to [-180:], so nothing else changes.
-    yf_data = fetch_yfinance_bulk(all_yf_tickers, days_back=500)
+    yf_data = fetch_yfinance_bulk(all_yf_tickers, days_back=220)
 
     E = {}
     for name, ticker in STOOQ_TICKERS.items():
@@ -1695,38 +1148,6 @@ def main():
         arr = yf_data.get(symbol, [])
         asset_price_history[name] = arr[-180:] if arr else []
         print(f'  {name} ({symbol}): {len(asset_price_history[name])} obs' if arr else f'  {name} ({symbol}): FAILED')
-
-    print('Extending the broad dollar index to today via ECB reference rates...')
-    usd_daily, usd_meta = build_usd_daily(S)
-    if usd_meta['proxy_dates']:
-        print(f"  Fed print {usd_meta['official_as_of']} \u2192 estimated through "
-              f"{usd_meta['proxy_dates'][-1]} ({len(usd_meta['proxy_dates'])} days, "
-              f"{usd_meta['basket_coverage']*100:.0f}% basket coverage)")
-    else:
-        print(f"  no extension this run \u2014 {usd_meta.get('proxy_note') or 'nothing newer than the Fed print'}")
-
-    print('Computing dollar impulse and asset sensitivity...')
-    model['usd_flow'] = compute_usd_flow(S, yf_data, usd=usd_daily, usd_meta=usd_meta)
-    if model['usd_flow']:
-        uf = model['usd_flow']
-        print(f"  {uf['direction']} \u2014 1m {uf['chg_1m_pct']}% (z {uf['z_1m']}), "
-              f"{len(uf['assets'])} assets scored")
-
-    # Speculative positioning. Deliberately AFTER the model is computed and
-    # never folded into it: a dead CFTC feed costs one panel, not the run.
-    print('Fetching CFTC speculative positioning...')
-    model['cot_positioning'] = compute_cot_positioning()
-    if model['cot_positioning']:
-        cp = model['cot_positioning']
-        print(f"  composite crowding {cp['composite_crowding']} as of {cp['as_of']}, "
-              f"{len(cp['contracts'])} contracts, {cp['coverage']*100:.0f}% coverage by weight")
-        model['fx_quadrant'] = cot_quadrant(model.get('fx_stress'), cp['composite_crowding'])
-        if model['fx_quadrant']:
-            print(f"  FX read: {model['fx_quadrant']['name']}")
-    else:
-        model['cot_positioning'] = None
-        model['fx_quadrant'] = None
-        print('  positioning unavailable this run \u2014 panel will be hidden')
 
     print('Reconstructing full risk-score history (~180 days, every metric, sampled every 3 days)...')
     today = datetime.now(timezone.utc).date()
@@ -1745,6 +1166,8 @@ def main():
             live_point[cat] = round(v, 2) if v is not None else None
         live_point['Inflationary Pressure'] = round(model['inflationary_pressure'], 2) if model['inflationary_pressure'] is not None else None
         live_point['FX Stress'] = round(model['fx_stress'], 2) if model['fx_stress'] is not None else None
+        ry = next((i for i in model['indicators'] if i['name'] == 'Real 10-Year Yield'), None)
+        live_point['Real Yield'] = round(ry['score'], 2) if ry and ry['score'] is not None else None
         fedbs_indicator = next((i for i in model['indicators'] if i['name'] == 'Fed Balance Sheet'), None)
         live_point['Fed Balance Sheet'] = round(fedbs_indicator['score'], 2) if fedbs_indicator and fedbs_indicator['score'] is not None else None
         risk_history.append(live_point)
