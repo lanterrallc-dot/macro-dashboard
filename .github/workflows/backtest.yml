@@ -16,6 +16,67 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: backtest-asset-outlook
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install yfinance pandas
+
+      - name: Run backtest
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python3 backtest_asset_outlook.py
+
+      - name: Commit result
+        run: |
+          set -e
+          git config user.name  "macro-model-bot"
+          git config user.email "macro-model-bot@users.noreply.github.com"
+
+          # Same reasoning as the refresh workflow: this file is regenerated
+          # whole, so never try to merge it. Set it aside, reset onto the
+          # remote, put it back. The 15-minute refresh job pushes constantly,
+          # so the remote WILL have moved during this run.
+          cp asset_outlook_backtest.json /tmp/backtest.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/backtest.json asset_outlook_backtest.json
+
+          git add asset_outlook_backtest.json
+          if git diff --staged --quiet; then
+            echo "Backtest output unchanged; nothing to commit."
+            exit 0
+          fi
+          git commit -m "backtest: refresh asset_outlook_backtest.json"
+          git push origin HEAD:main# Runs the Asset Outlook backtest and commits the result.
+#
+# This is deliberately NOT on the 15-minute schedule that refreshes the model:
+# the backtest re-reads six years of history and re-derives the regime on
+# hundreds of dates, and the answer barely moves week to week. Weekly, plus a
+# manual button, is the right cadence.
+#
+# Save as .github/workflows/backtest.yml
+name: Backtest asset outlook
+
+on:
+  workflow_dispatch:        # the "Run workflow" button in the Actions tab
+  schedule:
+    - cron: '0 7 * * 1'     # Mondays, 07:00 UTC
+
+permissions:
+  contents: write
+
 jobs:
   backtest:
     runs-on: ubuntu-latest
