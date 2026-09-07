@@ -1,30 +1,74 @@
-name: Refresh macro liquidity model
+# Regenerates model_output.json and commits it.
+#
+# Save as .github/workflows/refresh.yml
+name: Refresh macro model
+
 on:
+  workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
-  workflow_dispatch: {}
+    - cron: '*/15 * * * *'
+
 permissions:
   contents: write
+
+# Two runs writing the same generated file will fight. Queue them instead:
+# a refresh that starts while another is mid-flight waits its turn rather
+# than racing it to the push.
+concurrency:
+  group: refresh-model
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: '3.11'
+
       - name: Install dependencies
-        run: pip install yfinance
-      - name: Run refresh script
+        run: pip install yfinance pandas
+
+      - name: Run model
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python3 refresh_model.py
+
       - name: Commit updated output
         run: |
-          git config user.name macro-model-bot
-          git config user.email actions@users.noreply.github.com
-          git add model_output.json
-          git diff --quiet --cached || git commit -m automated-refresh
-          git pull --rebase origin main
-          git push
+          set -e
+          git config user.name  "macro-model-bot"
+          git config user.email "macro-model-bot@users.noreply.github.com"
+
+          # model_output.json is regenerated in full on every run, so there is
+          # nothing meaningful to merge and the newest run always wins. The
+          # previous version pulled with --rebase, which asks git to replay one
+          # complete rewrite of a JSON file on top of another complete rewrite —
+          # that conflicts every single time the remote has moved on, which is
+          # exactly the failure being fixed here.
+          #
+          # Instead: set the freshly generated file aside, hard-reset onto the
+          # current remote so no other change is lost, put the file back, commit.
+          # No merge is ever attempted, so no conflict is possible.
+          mkdir -p /tmp/generated
+          for f in model_output.json asset_outlook_backtest.json; do
+            [ -f "$f" ] && cp "$f" /tmp/generated/ || true
+          done
+
+          git fetch origin main
+          git reset --hard origin/main
+
+          for f in model_output.json asset_outlook_backtest.json; do
+            [ -f "/tmp/generated/$f" ] && cp "/tmp/generated/$f" "$f" || true
+          done
+
+          git add -A model_output.json asset_outlook_backtest.json 2>/dev/null || true
+          # An unchanged output is a normal outcome, not a failure.
+          if git diff --staged --quiet; then
+            echo "No change in generated output; nothing to commit."
+            exit 0
+          fi
+          git commit -m "automated-refresh: $(date -u +'%Y-%m-%dT%H:%MZ')"
+          git push origin HEAD:main
