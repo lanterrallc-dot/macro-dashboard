@@ -1,0 +1,61 @@
+name: Refresh fiscal monitor
+
+# Deliberately a separate workflow from the macro model refresh: the fiscal
+# inputs are quarterly national-accounts data, so once a day is plenty, and
+# keeping it separate means a failure here can never stop the macro dashboard
+# from publishing.
+
+on:
+  schedule:
+    - cron: '25 12 * * *'   # 12:25 UTC daily
+  workflow_dispatch:         # also runnable by hand from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-fiscal
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # No dependency install step: refresh_fiscal.py is standard library only.
+
+      - name: Run fiscal refresh
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python refresh_fiscal.py
+
+      - name: Commit updated output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add fiscal_output.json
+          if git diff --staged --quiet; then
+            echo "No change in fiscal_output.json — nothing to commit."
+            exit 0
+          fi
+          git commit -m "Refresh fiscal_output.json"
+          # The macro job runs every 15 minutes and pushes to the same branch,
+          # so a push here can lose a race. Rebase onto whatever landed first
+          # and retry rather than failing the run.
+          for attempt in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin "${{ github.ref_name }}" && git push; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; retrying in 10s."
+            sleep 10
+          done
+          echo "Could not push after 5 attempts."
+          exit 1
