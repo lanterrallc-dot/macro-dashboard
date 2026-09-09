@@ -211,13 +211,17 @@ var scn = null;
 
 /* ---------- small helpers ---------- */
 function el(id){ return document.getElementById(id); }
+// isFinite(null) is TRUE, because null coerces to 0. Anything that treats a
+// missing observation as a number will plot it at zero. Every gap check in
+// this file goes through num() instead.
+function num(v){ return typeof v === "number" && isFinite(v); }
 function fmt(v, d, suffix){
-  if(v===null||v===undefined||!isFinite(v)) return "—";
+  if(!num(v)) return "—";
   var s = v.toFixed(d===undefined?2:d);
   return s + (suffix||"");
 }
 function signed(v,d,suffix){
-  if(v===null||v===undefined||!isFinite(v)) return "—";
+  if(!num(v)) return "—";
   return (v>0?"+":"") + fmt(v,d,suffix);
 }
 function toMap(id){
@@ -330,7 +334,7 @@ function buildQuarterly(){
 
 /* ---------- status helpers ---------- */
 function band(v, watch, warn, alert){
-  if(v===null||!isFinite(v)) return "ok";
+  if(!num(v)) return "ok";
   if(v>=alert) return "alert";
   if(v>=warn) return "warn";
   if(v>=watch) return "watch";
@@ -342,8 +346,20 @@ function dot(b){ return '<span class="dot s-'+b+'"></span>'; }
 function render(){
   Q = buildQuarterly();
   if(!Q.length){ el("src").textContent += " — no overlapping quarterly data"; return; }
-  latest = Q[Q.length-1];
-  var prior = Q.length>4 ? Q[Q.length-5] : null;
+
+  // Debt held by the public comes from the Treasury Bulletin and publishes a
+  // quarter behind the national accounts, so the most recent quarter usually
+  // has GDP and the fiscal flows but no debt stock. Every reading on this page
+  // is anchored on the latest quarter where all of it exists; the charts still
+  // draw the partial quarters, with a gap where the debt line stops.
+  var complete = Q.filter(function(r){ return num(r.drift) && num(r.ratio) && num(r.eff); });
+  if(!complete.length){
+    el("src").innerHTML += ' <span class="fail">— debt held by the public did not load, ' +
+      'so the debt-ratio arithmetic cannot be computed.</span>';
+    return;
+  }
+  latest = complete[complete.length-1];
+  var prior = complete.length>4 ? complete[complete.length-5] : null;
 
   renderHero(latest);
   renderConditions(latest, prior);
@@ -371,10 +387,18 @@ function renderHero(r){
     (r.gap>0?"+":"") + (r.gap/100*r.ratio).toFixed(1) +
     " points because the debt costs " + r.eff.toFixed(2) + "% while the economy grows " +
     r.g.toFixed(2) + "% in nominal terms.";
-  el("identity").innerHTML =
+  var identity =
     "<b>Δ debt/GDP ≈ primary deficit + (effective rate − nominal growth) × debt/GDP</b><br>" +
     fmt(r.drift,1) + " ≈ " + fmt(r.primary,1) + " + (" + fmt(r.eff,2) + " − " +
     fmt(r.g,2) + ") × " + fmt(r.ratio/100,2);
+
+  var newest = Q[Q.length-1];
+  if(newest && newest.date !== r.date){
+    identity += "<br><br>The national accounts run to " + quarterLabel(newest.date) +
+      ", but debt held by the public is published a quarter behind, so every reading " +
+      "here is as of " + quarterLabel(r.date) + ".";
+  }
+  el("identity").innerHTML = identity;
 }
 
 function renderConditions(r, prior){
@@ -513,7 +537,7 @@ function chart(node, cfg){
   var W = 760, H = cfg.height || 260;
   var m = {t:12, r:12, b:26, l:44};
   var all = [];
-  cfg.series.forEach(function(s){ s.pts.forEach(function(p){ if(isFinite(p[1])) all.push(p); }); });
+  cfg.series.forEach(function(s){ s.pts.forEach(function(p){ if(num(p[1])) all.push(p); }); });
   if(!all.length){ node.innerHTML = '<div class="note">No data.</div>'; return; }
   var xs = all.map(function(p){return p[0];}), ys = all.map(function(p){return p[1];});
   var x0 = Math.min.apply(null,xs), x1 = Math.max.apply(null,xs);
@@ -546,692 +570,7 @@ function chart(node, cfg){
   cfg.series.forEach(function(s){
     var d = "", started = false;
     s.pts.forEach(function(p){
-      if(!isFinite(p[1])){ started = false; return; }
-      d += (started?"L":"M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1) + " ";
-      started = true;
-    });
-    svg += '<path d="'+d+'" fill="none" stroke="'+s.color+'" stroke-width="'+(s.w||1.8)+'"'+
-           (s.dash?' stroke-dasharray="5 4"':'')+' stroke-linejoin="round"/>';
-  });
-  svg += '</svg>';
-  node.innerHTML = svg;
-}
-
-function ts(d){ return Date.parse(d); }
-function yearFmt(v){ return String(new Date(v).getUTCFullYear()); }
-
-function renderCharts(){
-  var from = ts("1995-01-01");
-  var qs = Q.filter(function(r){ return ts(r.date) >= from; });
-
-  chart(el("chartRG"), {
-    aria:"Effective rate on the debt against nominal GDP growth",
-    zeroLine:false, xFmt:yearFmt, yFmt:function(v){return v.toFixed(1)+"%";},
-    series:[
-      {color:"#d8a537", pts: qs.map(function(r){return [ts(r.date), r.eff];})},
-      {color:"#5c9ec7", pts: qs.map(function(r){return [ts(r.date), r.g];})},
-      {color:"#c1523a", w:1.2, pts:(S.DGS10||[]).filter(function(p,i){return i%20===0 && ts(p[0])>=from;})
-        .map(function(p){return [ts(p[0]), p[1]];})}
-    ]
-  });
-
-  chart(el("chartInt"), {
-    aria:"Interest expense as a share of GDP and of receipts", height:220,
-    xFmt:yearFmt, yFmt:function(v){return v.toFixed(0)+"%";},
-    series:[
-      {color:"#d8a537", pts: qs.map(function(r){return [ts(r.date), r.intGdp];})},
-      {color:"#d08a3c", pts: qs.map(function(r){return [ts(r.date), r.intRec];})}
-    ]
-  });
-
-  chart(el("chartDebt"), {
-    aria:"Federal debt held by the public as a share of GDP", height:220,
-    xFmt:yearFmt, yFmt:function(v){return v.toFixed(0)+"%";},
-    series:[
-      {color:"#5c9ec7", pts: qs.map(function(r){return [ts(r.date), r.ratio];})}
-    ]
-  });
-}
-
-/* ---------- scenario ---------- */
-var SLIDERS = [
-  {key:"market",  label:"Market yield the debt reprices to", min:0,  max:10, step:0.1, unit:"%"},
-  {key:"growth",  label:"Nominal GDP growth",                min:0,  max:9,  step:0.1, unit:"%"},
-  {key:"primary", label:"Primary deficit",                   min:-3, max:10, step:0.1, unit:"% of GDP"},
-  {key:"refi",    label:"Refinancing pace",                  min:5,  max:40, step:1,   unit:"% of debt per year"}
-];
-
-function scenarioDefaults(){
-  var y10 = lastVal("DGS10");
-  return {
-    market:  y10 ? Math.round(y10*10)/10 : 4.5,
-    growth:  Math.round(latest.g*10)/10,
-    primary: Math.round(latest.primary*10)/10,
-    refi:    18
-  };
-}
-
-function initScenario(){
-  scn = scenarioDefaults();
-  var html = "";
-  SLIDERS.forEach(function(s){
-    html += '<div class="slider">' +
-      '<label for="sl-'+s.key+'"><span>'+s.label+'</span><b id="lb-'+s.key+'"></b></label>' +
-      '<input type="range" id="sl-'+s.key+'" min="'+s.min+'" max="'+s.max+'" step="'+s.step+'">' +
-      '</div>';
-  });
-  el("sliders").innerHTML = html;
-  SLIDERS.forEach(function(s){
-    var input = el("sl-"+s.key);
-    input.value = scn[s.key];
-    input.addEventListener("input", function(){
-      scn[s.key] = parseFloat(input.value);
-      runScenario();
-    });
-  });
-  el("resetScn").onclick = function(){
-    scn = scenarioDefaults();
-    SLIDERS.forEach(function(s){ el("sl-"+s.key).value = scn[s.key]; });
-    runScenario();
-  };
-  runScenario();
-}
-
-function runScenario(){
-  SLIDERS.forEach(function(s){
-    el("lb-"+s.key).textContent = scn[s.key].toFixed(s.step<1?1:0) + " " + s.unit;
-  });
-
-  var years = 8;
-  var ratio = latest.ratio, eff = latest.eff, gdp = latest.gdp;
-  var path = [{y:0, eff:eff, ratio:ratio, intGdp:eff/100*ratio, dollars:gdp*ratio/100*eff/100}];
-  for(var i=1;i<=years;i++){
-    eff = eff + (scn.refi/100)*(scn.market - eff);
-    ratio = ratio + scn.primary + (eff - scn.growth)/100*ratio;
-    gdp = gdp * (1 + scn.growth/100);
-    var intGdp = eff/100*ratio;
-    path.push({y:i, eff:eff, ratio:ratio, intGdp:intGdp, dollars: gdp*ratio/100*eff/100});
-  }
-
-  var thisYear = new Date(latest.date).getUTCFullYear();
-  var html = "";
-  path.forEach(function(p){
-    var b = band(p.intGdp, 2.5, 3, 4);
-    html += "<tr><td>" + (p.y===0 ? quarterLabel(latest.date)+" (now)" : (thisYear+p.y)) + "</td>" +
-            "<td>" + fmt(p.eff,2,"%") + "</td>" +
-            '<td class="num">' + fmt(p.ratio,1,"%") + "</td>" +
-            '<td class="t-'+b+'">' + fmt(p.intGdp,2,"%") + "</td>" +
-            "<td>" + fmt(p.dollars/1000,2) + "</td></tr>";
-  });
-  el("projTable").innerHTML = html;
-
-  chart(el("chartProj"), {
-    aria:"Projected debt ratio and interest burden", height:240,
-    xFmt:function(v){ return String(thisYear + Math.round(v)); },
-    yFmt:function(v){ return v.toFixed(0)+"%"; },
-    series:[
-      {color:"#d8a537", pts: path.map(function(p){return [p.y, p.ratio];})},
-      {color:"#d08a3c", dash:true, pts: path.map(function(p){return [p.y, p.intGdp];})}
-    ]
-  });
-}
-
-el("reload").addEventListener("click", function(){ boot(true); });
-boot(false);
-
-})();
-</script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fiscal Dominance Monitor</title>
-<style>
-  :root{
-    --ink:#0f1722;
-    --panel:#16202e;
-    --panel2:#1b2637;
-    --rule:#26344a;
-    --text:#e9e3d5;
-    --dim:#93a3ba;
-    --brass:#d8a537;
-    --cool:#5c9ec7;
-    --warm:#d08a3c;
-    --hot:#c1523a;
-    --good:#5aa06f;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
-  body{
-    background:var(--ink);
-    color:var(--text);
-    font:16px/1.55 "Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
-    font-variant-numeric:tabular-nums;
-    padding:0 0 64px;
-  }
-  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
-  a{color:var(--cool)}
-  h1,h2,h3{font-family:Georgia,"Iowan Old Style",serif;font-weight:600;letter-spacing:.1px}
-  h1{font-size:29px;margin:0 0 4px}
-  h2{font-size:20px;margin:38px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--rule)}
-  p{max-width:70ch}
-  header{border-bottom:1px solid var(--rule);padding:22px 0 16px;margin-bottom:26px;background:#0c131c}
-  nav{margin-top:10px;font-size:14px;color:var(--dim)}
-  nav a{margin-right:16px;text-decoration:none}
-  nav a:hover{text-decoration:underline}
-  .status{font-size:13px;color:var(--dim);margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  button{
-    font:inherit;font-size:13px;color:var(--text);background:var(--panel2);
-    border:1px solid var(--rule);border-radius:3px;padding:5px 11px;cursor:pointer;
-  }
-  button:hover{border-color:var(--brass)}
-  button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
-
-  /* hero */
-  .hero{background:var(--panel);border:1px solid var(--rule);border-left:4px solid var(--brass);padding:22px 24px}
-  .hero .big{font-size:64px;line-height:1;font-weight:600;letter-spacing:-1px}
-  .hero .unit{font-size:19px;color:var(--dim);margin-left:8px;letter-spacing:0}
-  .hero .lede{font-family:Georgia,serif;font-size:17px;color:var(--text);margin:12px 0 0;max-width:62ch}
-  .identity{font-size:14px;color:var(--dim);margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}
-  .identity b{color:var(--text);font-weight:500}
-
-  /* condition strip */
-  .conds{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
-  .cond{background:var(--panel);border:1px solid var(--rule);padding:12px 13px}
-  .cond .q{font-size:13px;color:var(--dim);min-height:34px}
-  .cond .a{font-size:19px;margin-top:6px}
-  .cond.met{border-color:var(--hot)}
-  .verdict{margin-top:14px;padding:12px 16px;border:1px solid var(--rule);background:var(--panel2);font-size:15px}
-
-  table{width:100%;border-collapse:collapse;font-size:14.5px;margin-top:6px}
-  th,td{text-align:right;padding:9px 10px;border-bottom:1px solid var(--rule)}
-  th{color:var(--dim);font-weight:500;font-size:13px;border-bottom:1px solid #33455f}
-  td:first-child,th:first-child{text-align:left}
-  td.num{font-weight:600}
-  tbody tr:hover{background:#1a2434}
-  .note{font-size:13px;color:var(--dim)}
-  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
-  .s-ok{background:var(--good)} .s-watch{background:var(--cool)}
-  .s-warn{background:var(--warm)} .s-alert{background:var(--hot)}
-  .t-ok{color:var(--good)} .t-watch{color:var(--cool)}
-  .t-warn{color:var(--warm)} .t-alert{color:var(--hot)}
-
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
-  .card{background:var(--panel);border:1px solid var(--rule);padding:16px 18px}
-  .chart{margin-top:8px}
-  .chart svg{width:100%;height:auto;display:block}
-  .legend{font-size:13px;color:var(--dim);margin:2px 0 4px}
-  .legend span{margin-right:16px}
-  .swatch{display:inline-block;width:16px;height:3px;vertical-align:middle;margin-right:6px}
-
-  .sliders{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 26px;margin:14px 0 8px}
-  .slider label{display:flex;justify-content:space-between;font-size:14px;color:var(--dim)}
-  .slider label b{color:var(--text);font-weight:600}
-  input[type=range]{width:100%;accent-color:var(--brass);margin-top:4px}
-
-  .fail{color:var(--hot)}
-  footer{margin-top:44px;font-size:13px;color:var(--dim);border-top:1px solid var(--rule);padding-top:16px}
-  @media (max-width:760px){
-    .conds{grid-template-columns:1fr 1fr}
-    .grid2,.sliders{grid-template-columns:1fr}
-    .hero .big{font-size:48px}
-    body{font-size:15px}
-  }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="wrap">
-    <h1>Fiscal Dominance Monitor</h1>
-    <div class="note">Effective borrowing cost against nominal growth, and what it does to the debt path.</div>
-    <nav>
-      <a href="https://lanterrallc-dot.github.io/macro-dashboard/dashboard.html">Macro / Liquidity Risk Monitor</a>
-      <a href="https://lanterrallc-dot.github.io/fxstress/">FX Stress</a>
-      <a href="https://lanterrallc-dot.github.io/fxstress/carry.html">Carry</a>
-      <a href="https://lanterrallc-dot.github.io/fxstress/dollar.html">Dollar</a>
-    </nav>
-    <div class="status">
-      <span id="src">Loading data…</span>
-      <button id="reload">Refresh from FRED</button>
-    </div>
-  </div>
-</header>
-
-<div class="wrap">
-
-  <section class="hero">
-    <div><span class="big" id="drift">—</span><span class="unit">points of GDP added to the debt ratio per year</span></div>
-    <p class="lede" id="driftText">Reading the arithmetic…</p>
-    <div class="identity" id="identity"></div>
-  </section>
-
-  <div class="conds" id="conds"></div>
-  <div class="verdict" id="verdict"></div>
-
-  <h2>The four readings that matter</h2>
-  <table>
-    <thead><tr><th>Indicator</th><th>Latest</th><th>Year ago</th><th>Warning zone</th></tr></thead>
-    <tbody id="core"></tbody>
-  </table>
-  <p class="note">Effective rate is federal interest payments (annualised) over debt held by the public at the start of the quarter. Primary deficit is federal current expenditures less interest less current receipts, on the national-accounts basis, so it will not match the Treasury's fiscal-year headline.</p>
-
-  <h2>Repricing: where interest expense goes as old coupons roll off</h2>
-  <p class="note">Applied to the current stock of debt held by the public. The gap between today's effective rate and the market yield is the pipeline.</p>
-  <table>
-    <thead><tr><th>Average cost of the debt</th><th>Interest, $tn/yr</th><th>% of GDP</th><th>% of federal receipts</th><th>vs today</th></tr></thead>
-    <tbody id="reprice"></tbody>
-  </table>
-
-  <h2>The market and the Fed</h2>
-  <table>
-    <thead><tr><th>Series</th><th>Latest</th><th>3 months ago</th><th>Reading</th></tr></thead>
-    <tbody id="market"></tbody>
-  </table>
-
-  <h2>Cost of money against the growth of the economy</h2>
-  <div class="card">
-    <div class="legend">
-      <span><i class="swatch" style="background:var(--brass)"></i>Effective rate on the debt</span>
-      <span><i class="swatch" style="background:var(--cool)"></i>Nominal GDP growth, 4-quarter</span>
-      <span><i class="swatch" style="background:var(--hot)"></i>10-year Treasury yield</span>
-    </div>
-    <div class="chart" id="chartRG"></div>
-  </div>
-
-  <div class="grid2" style="margin-top:22px">
-    <div class="card">
-      <h3 style="margin:0 0 2px;font-size:17px">Interest burden</h3>
-      <div class="legend">
-        <span><i class="swatch" style="background:var(--brass)"></i>% of GDP</span>
-        <span><i class="swatch" style="background:var(--warm)"></i>% of receipts</span>
-      </div>
-      <div class="chart" id="chartInt"></div>
-    </div>
-    <div class="card">
-      <h3 style="margin:0 0 2px;font-size:17px">Debt held by the public</h3>
-      <div class="legend"><span><i class="swatch" style="background:var(--cool)"></i>% of GDP</span></div>
-      <div class="chart" id="chartDebt"></div>
-    </div>
-  </div>
-
-  <h2>Run it forward</h2>
-  <p class="note">Sliders start at the latest readings. Refinancing pace is the share of the debt stock that reprices to the market yield each year — roughly the inverse of average maturity.</p>
-  <div class="card">
-    <div class="sliders" id="sliders"></div>
-    <div style="margin-bottom:10px"><button id="resetScn">Reset to latest data</button></div>
-    <div class="legend">
-      <span><i class="swatch" style="background:var(--brass)"></i>Debt / GDP, %</span>
-      <span><i class="swatch" style="background:var(--warm)"></i>Interest, % of GDP</span>
-    </div>
-    <div class="chart" id="chartProj"></div>
-    <table style="margin-top:14px">
-      <thead><tr><th>Year</th><th>Effective rate</th><th>Debt / GDP</th><th>Interest, % of GDP</th><th>Interest, $tn</th></tr></thead>
-      <tbody id="projTable"></tbody>
-    </table>
-  </div>
-
-  <footer>
-    <div id="failnote"></div>
-    <p>All series from FRED: GDP, A091RC1Q027SBEA, FGRECPT, FGEXPND, FYGFDPUN, GFDEBTN, DGS10, DGS30, DFII10, T10YIE, THREEFYTP10, DFF, PCEPILFE, TREAST, WALCL. The page uses <code>fiscal_output.json</code> when it is present and falls back to pulling the CSVs directly.</p>
-  </footer>
-</div>
-
-<script>
-(function(){
-"use strict";
-
-var IDS = ["GDP","A091RC1Q027SBEA","FGRECPT","FGEXPND","FYGFDPUN","GFDEBTN",
-           "DGS10","DGS30","DFII10","T10YIE","THREEFYTP10","DFF","PCEPILFE",
-           "TREAST","WALCL"];
-var START = "1990-01-01";
-var S = {};        // id -> [[dateString, value], ...]
-var FAILED = [];
-var Q = [];        // quarterly derived rows
-var latest = null;
-var scn = null;
-
-/* ---------- small helpers ---------- */
-function el(id){ return document.getElementById(id); }
-function fmt(v, d, suffix){
-  if(v===null||v===undefined||!isFinite(v)) return "—";
-  var s = v.toFixed(d===undefined?2:d);
-  return s + (suffix||"");
-}
-function signed(v,d,suffix){
-  if(v===null||v===undefined||!isFinite(v)) return "—";
-  return (v>0?"+":"") + fmt(v,d,suffix);
-}
-function toMap(id){
-  var m = {}, a = S[id]||[];
-  for(var i=0;i<a.length;i++) m[a[i][0]] = a[i][1];
-  return m;
-}
-function lastVal(id){
-  var a = S[id]||[];
-  return a.length ? a[a.length-1][1] : null;
-}
-function lastDate(id){
-  var a = S[id]||[];
-  return a.length ? a[a.length-1][0] : null;
-}
-function valNBack(id, n){          // n observations back from the end
-  var a = S[id]||[];
-  var i = a.length-1-n;
-  return i>=0 ? a[i][1] : null;
-}
-function quarterLabel(d){
-  var p = d.split("-");
-  var q = Math.floor((parseInt(p[1],10)-1)/3)+1;
-  return p[0]+" Q"+q;
-}
-
-/* ---------- loading ---------- */
-function parseCSV(text){
-  var lines = text.split(/\r?\n/), out = [];
-  for(var i=1;i<lines.length;i++){
-    if(!lines[i]) continue;
-    var c = lines[i].split(",");
-    if(c.length<2) continue;
-    var d = c[0].trim(), v = c[1].trim();
-    if(!d || v==="." || v==="" || v==="NA") continue;
-    var n = parseFloat(v);
-    if(isFinite(n)) out.push([d,n]);
-  }
-  return out;
-}
-
-function loadFromJSON(){
-  return fetch("fiscal_output.json", {cache:"no-store"}).then(function(r){
-    if(!r.ok) throw new Error("no json");
-    return r.json();
-  }).then(function(j){
-    if(!j || !j.series) throw new Error("bad json");
-    S = j.series;
-    FAILED = j.failed || [];
-    return "fiscal_output.json, refreshed " + (j.generated_at||"unknown time");
-  });
-}
-
-function loadFromFRED(){
-  S = {}; FAILED = [];
-  var base = "https://fred.stlouisfed.org/graph/fredgraph.csv?cosd="+START+"&id=";
-  var jobs = IDS.map(function(id){
-    return fetch(base+id, {cache:"no-store"})
-      .then(function(r){ if(!r.ok) throw new Error(r.status); return r.text(); })
-      .then(function(t){ S[id] = parseCSV(t); })
-      .catch(function(){ FAILED.push(id); });
-  });
-  return Promise.all(jobs).then(function(){
-    if(!S.GDP || !S.GDP.length) throw new Error("FRED fetch blocked");
-    return "FRED, live, " + new Date().toLocaleString();
-  });
-}
-
-function boot(forceLive){
-  el("src").textContent = "Loading data…";
-  var chain = forceLive ? loadFromFRED() : loadFromJSON().catch(loadFromFRED);
-  chain.then(function(srcLabel){
-    el("src").textContent = "Source: " + srcLabel;
-    render();
-  }).catch(function(err){
-    el("src").innerHTML = '<span class="fail">No data. The browser could not reach FRED '+
-      '(CORS or network). Run refresh_fiscal.py to create fiscal_output.json and reload.</span>';
-    console.error(err);
-  });
-}
-
-/* ---------- derived quarterly panel ---------- */
-function buildQuarterly(){
-  var gdp=toMap("GDP"), inte=toMap("A091RC1Q027SBEA"), rec=toMap("FGRECPT"),
-      exp=toMap("FGEXPND"), pub=toMap("FYGFDPUN");
-  var dates = (S.GDP||[]).map(function(r){return r[0];})
-    .filter(function(d){ return inte[d]!==undefined && rec[d]!==undefined && exp[d]!==undefined; });
-  var rows = [];
-  for(var i=0;i<dates.length;i++){
-    var d = dates[i];
-    var G = gdp[d], I = inte[d], R = rec[d], E = exp[d];
-    var debtNow = pub[d]!==undefined ? pub[d]/1000 : null;                 // $bn
-    var prev = i>0 ? dates[i-1] : null;
-    var debtPrev = (prev && pub[prev]!==undefined) ? pub[prev]/1000 : debtNow;
-    var eff = debtPrev ? (I/debtPrev*100) : null;
-    var g = (i>=4 && gdp[dates[i-4]]) ? (G/gdp[dates[i-4]]-1)*100 : null;
-    var ratio = debtNow ? debtNow/G*100 : null;
-    var prim = (E - I - R)/G*100;
-    var row = {
-      date:d, gdp:G, interest:I, receipts:R, outlays:E,
-      debt:debtNow, eff:eff, g:g, ratio:ratio, primary:prim,
-      intGdp: I/G*100, intRec: I/R*100,
-      gap: (eff!==null && g!==null) ? eff-g : null
-    };
-    row.drift = (row.gap!==null && ratio!==null) ? prim + row.gap/100*ratio : null;
-    rows.push(row);
-  }
-  return rows;
-}
-
-/* ---------- status helpers ---------- */
-function band(v, watch, warn, alert){
-  if(v===null||!isFinite(v)) return "ok";
-  if(v>=alert) return "alert";
-  if(v>=warn) return "warn";
-  if(v>=watch) return "watch";
-  return "ok";
-}
-function dot(b){ return '<span class="dot s-'+b+'"></span>'; }
-
-/* ---------- rendering ---------- */
-function render(){
-  Q = buildQuarterly();
-  if(!Q.length){ el("src").textContent += " — no overlapping quarterly data"; return; }
-  latest = Q[Q.length-1];
-  var prior = Q.length>4 ? Q[Q.length-5] : null;
-
-  renderHero(latest);
-  renderConditions(latest, prior);
-  renderCore(latest, prior);
-  renderReprice(latest);
-  renderMarket();
-  renderCharts();
-  initScenario();
-
-  if(FAILED.length){
-    el("failnote").innerHTML = '<span class="fail">Series that did not load: '+
-      FAILED.join(", ")+'. Anything depending on them shows a dash.</span>';
-  }
-}
-
-function renderHero(r){
-  var d = r.drift;
-  el("drift").textContent = (d===null?"—":(d>0?"+":"")+d.toFixed(1));
-  el("drift").className = "big t-" + band(d, 1, 3, 5);
-  var direction = d>0 ? "rising" : "falling";
-  el("driftText").textContent =
-    "At " + quarterLabel(r.date) + " readings, the debt ratio is " + direction +
-    " by about " + Math.abs(d).toFixed(1) + " points of GDP a year: a primary deficit of " +
-    r.primary.toFixed(1) + "% of GDP, plus a cost-of-money term of " +
-    (r.gap>0?"+":"") + (r.gap/100*r.ratio).toFixed(1) +
-    " points because the debt costs " + r.eff.toFixed(2) + "% while the economy grows " +
-    r.g.toFixed(2) + "% in nominal terms.";
-  el("identity").innerHTML =
-    "<b>Δ debt/GDP ≈ primary deficit + (effective rate − nominal growth) × debt/GDP</b><br>" +
-    fmt(r.drift,1) + " ≈ " + fmt(r.primary,1) + " + (" + fmt(r.eff,2) + " − " +
-    fmt(r.g,2) + ") × " + fmt(r.ratio/100,2);
-}
-
-function renderConditions(r, prior){
-  var intRising = prior ? (r.intGdp - prior.intGdp) > 0 : null;
-  var c = [
-    {q:"Effective rate at or above nominal growth?",
-     met: r.gap>=0,
-     a: fmt(r.eff,2,"%") + " vs " + fmt(r.g,2,"%") + "  (" + signed(r.gap,2," pts") + ")"},
-    {q:"Primary deficit of 3% of GDP or more?",
-     met: r.primary>=3,
-     a: fmt(r.primary,1,"% of GDP")},
-    {q:"Debt held by the public above 100% of GDP?",
-     met: r.ratio>=100,
-     a: fmt(r.ratio,1,"% of GDP")},
-    {q:"Interest expense still climbing?",
-     met: intRising===true,
-     a: fmt(r.intGdp,2,"% of GDP") + (prior? "  (" + signed(r.intGdp-prior.intGdp,2) + " y/y)" : "")}
-  ];
-  var n = 0, html = "";
-  for(var i=0;i<c.length;i++){
-    if(c[i].met) n++;
-    html += '<div class="cond'+(c[i].met?" met":"")+'">' +
-            '<div class="q">'+c[i].q+'</div>' +
-            '<div class="a t-'+(c[i].met?"alert":"ok")+'">'+c[i].a+'</div></div>';
-  }
-  el("conds").innerHTML = html;
-
-  var verdicts = [
-    ["t-ok",    "None of the four conditions is met. Debt dynamics are self-correcting at current settings."],
-    ["t-ok",    "One condition met. The arithmetic still works; nothing here forces the Fed's hand."],
-    ["t-watch", "Two conditions met. Worth watching, but the debt path is not yet self-feeding."],
-    ["t-warn",  "Three of four conditions met. The tension between what monetary policy needs and what the fiscal accounts can carry is building."],
-    ["t-alert", "All four conditions met simultaneously. This is the configuration where the rate needed to hold inflation down starts to exceed the rate the fiscal system tolerates."]
-  ];
-  el("verdict").innerHTML = '<b>' + n + ' of 4 conditions met.</b> ' +
-    '<span class="'+verdicts[n][0]+'">' + verdicts[n][1] + '</span>';
-}
-
-function renderCore(r, prior){
-  var rows = [
-    {name:"Effective rate minus nominal GDP growth", v:r.gap, p:prior?prior.gap:null, d:2, s:" pts",
-     zone:"≥ 0", b:band(r.gap, -0.5, 0, 1)},
-    {name:"Effective rate on debt held by the public", v:r.eff, p:prior?prior.eff:null, d:2, s:"%",
-     zone:"rising toward market yield", b:band(r.eff, 3, 4, 5)},
-    {name:"Nominal GDP growth, 4-quarter", v:r.g, p:prior?prior.g:null, d:2, s:"%",
-     zone:"below the effective rate", b:r.g<r.eff?"warn":"ok"},
-    {name:"Primary deficit", v:r.primary, p:prior?prior.primary:null, d:2, s:"% of GDP",
-     zone:"3–5% and above", b:band(r.primary, 1.5, 3, 5)},
-    {name:"Debt held by the public", v:r.ratio, p:prior?prior.ratio:null, d:1, s:"% of GDP",
-     zone:"above 100%", b:band(r.ratio, 80, 100, 120)},
-    {name:"Interest expense", v:r.intGdp, p:prior?prior.intGdp:null, d:2, s:"% of GDP",
-     zone:"above 3%", b:band(r.intGdp, 2.5, 3, 4)},
-    {name:"Interest as a share of federal receipts", v:r.intRec, p:prior?prior.intRec:null, d:1, s:"%",
-     zone:"above 14%", b:band(r.intRec, 10, 14, 18)},
-    {name:"Debt ratio drift", v:r.drift, p:prior?prior.drift:null, d:1, s:" pts/yr",
-     zone:"above 3 points a year", b:band(r.drift, 1, 3, 5)}
-  ];
-  var html = "";
-  for(var i=0;i<rows.length;i++){
-    var x = rows[i];
-    html += "<tr><td>" + dot(x.b) + x.name + "</td>" +
-            '<td class="num t-'+x.b+'">' + fmt(x.v,x.d,x.s) + "</td>" +
-            "<td>" + fmt(x.p,x.d,x.s) + "</td>" +
-            '<td class="note">' + x.zone + "</td></tr>";
-  }
-  el("core").innerHTML = html;
-}
-
-function renderReprice(r){
-  var y10 = lastVal("DGS10");
-  var levels = [3,4,5,6];
-  if(y10) levels.push(Math.round(y10*100)/100);
-  levels.push(r.eff);
-  levels.sort(function(a,b){return a-b;});
-  var html = "";
-  for(var i=0;i<levels.length;i++){
-    var rate = levels[i];
-    var interest = r.debt * rate/100;                 // $bn per year
-    var isNow = Math.abs(rate-r.eff) < 0.005;
-    var isMkt = y10 && Math.abs(rate-Math.round(y10*100)/100) < 0.005;
-    var tag = isNow ? " — today's effective cost" : (isMkt ? " — today's 10-year yield" : "");
-    var b = band(interest/r.gdp*100, 2.5, 3, 4);
-    html += "<tr><td>" + dot(b) + fmt(rate,2,"%") + '<span class="note">'+tag+"</span></td>" +
-            '<td class="num">' + fmt(interest/1000,2) + "</td>" +
-            "<td>" + fmt(interest/r.gdp*100,2,"%") + "</td>" +
-            "<td>" + fmt(interest/r.receipts*100,1,"%") + "</td>" +
-            "<td>" + (isNow ? "—" : signed((interest-r.interest)/1000,2," tn")) + "</td></tr>";
-  }
-  el("reprice").innerHTML = html;
-}
-
-function renderMarket(){
-  var corePCE = null, corePCEprior = null;
-  var p = S.PCEPILFE||[];
-  if(p.length>13){
-    corePCE = (p[p.length-1][1]/p[p.length-13][1]-1)*100;
-    corePCEprior = (p[p.length-4][1]/p[p.length-16][1]-1)*100;
-  }
-  var treast = lastVal("TREAST"), treast13 = valNBack("TREAST",13);
-  var fedChange = (treast!==null && treast13!==null) ? (treast-treast13)/1000 : null;
-  var tp = lastVal("THREEFYTP10"), tp3 = valNBack("THREEFYTP10",63);
-
-  var rows = [
-    {n:"10-year Treasury yield", v:lastVal("DGS10"), p:valNBack("DGS10",63), d:2, s:"%",
-     r:"the marginal cost of new borrowing", b:"ok"},
-    {n:"30-year Treasury yield", v:lastVal("DGS30"), p:valNBack("DGS30",63), d:2, s:"%",
-     r:"where the long-end absorption problem shows up first", b:"ok"},
-    {n:"10-year real yield", v:lastVal("DFII10"), p:valNBack("DFII10",63), d:2, s:"%",
-     r:"above ~2% is genuine restraint on the borrower", b:band(lastVal("DFII10"),1,2,2.5)},
-    {n:"10-year breakeven inflation", v:lastVal("T10YIE"), p:valNBack("T10YIE",63), d:2, s:"%",
-     r:"above ~2.5% is the market pricing the inflation exit", b:band(lastVal("T10YIE"),2.3,2.5,3)},
-    {n:"10-year term premium", v:tp, p:tp3, d:2, s:"%",
-     r:"rising premium means private buyers demanding more to absorb issuance",
-     b:band(tp,0.5,1,1.5)},
-    {n:"Core PCE inflation, y/y", v:corePCE, p:corePCEprior, d:2, s:"%",
-     r:"the constraint on any decision to ease the long end", b:band(corePCE,2.5,3,4)},
-    {n:"Fed Treasury holdings, 13-week change", v:fedChange, p:null, d:0, s:" $bn",
-     r:(fedChange>0 && corePCE>2.5)
-        ? "balance sheet expanding into above-target inflation — the Option B signal"
-        : "balance sheet not currently absorbing duration",
-     b:(fedChange>0 && corePCE>2.5) ? "alert" : "ok"}
-  ];
-  var html = "";
-  for(var i=0;i<rows.length;i++){
-    var x = rows[i];
-    html += "<tr><td>" + dot(x.b) + x.n + "</td>" +
-            '<td class="num t-'+x.b+'">' + fmt(x.v,x.d,x.s) + "</td>" +
-            "<td>" + fmt(x.p,x.d,x.s) + "</td>" +
-            '<td class="note">' + x.r + "</td></tr>";
-  }
-  el("market").innerHTML = html;
-}
-
-/* ---------- charts ---------- */
-function chart(node, cfg){
-  var W = 760, H = cfg.height || 260;
-  var m = {t:12, r:12, b:26, l:44};
-  var all = [];
-  cfg.series.forEach(function(s){ s.pts.forEach(function(p){ if(isFinite(p[1])) all.push(p); }); });
-  if(!all.length){ node.innerHTML = '<div class="note">No data.</div>'; return; }
-  var xs = all.map(function(p){return p[0];}), ys = all.map(function(p){return p[1];});
-  var x0 = Math.min.apply(null,xs), x1 = Math.max.apply(null,xs);
-  var y0 = Math.min.apply(null,ys), y1 = Math.max.apply(null,ys);
-  if(cfg.zeroLine){ y0 = Math.min(y0,0); y1 = Math.max(y1,0); }
-  var pad = (y1-y0)*0.08 || 1; y0 -= pad; y1 += pad;
-  function X(v){ return m.l + (v-x0)/(x1-x0||1)*(W-m.l-m.r); }
-  function Y(v){ return m.t + (1-(v-y0)/(y1-y0||1))*(H-m.t-m.b); }
-
-  var svg = '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+(cfg.aria||"chart")+'">';
-  // y grid
-  for(var i=0;i<=4;i++){
-    var v = y0 + (y1-y0)*i/4, y = Y(v);
-    svg += '<line x1="'+m.l+'" y1="'+y.toFixed(1)+'" x2="'+(W-m.r)+'" y2="'+y.toFixed(1)+
-           '" stroke="#26344a" stroke-width="1"/>';
-    svg += '<text x="'+(m.l-7)+'" y="'+(y+4).toFixed(1)+'" fill="#93a3ba" font-size="11" text-anchor="end">'+
-           (cfg.yFmt?cfg.yFmt(v):v.toFixed(1))+'</text>';
-  }
-  if(cfg.zeroLine && y0<0 && y1>0){
-    svg += '<line x1="'+m.l+'" y1="'+Y(0).toFixed(1)+'" x2="'+(W-m.r)+'" y2="'+Y(0).toFixed(1)+
-           '" stroke="#6d7f97" stroke-width="1.2"/>';
-  }
-  // x labels
-  for(var k=0;k<=5;k++){
-    var xv = x0 + (x1-x0)*k/5;
-    svg += '<text x="'+X(xv).toFixed(1)+'" y="'+(H-7)+'" fill="#93a3ba" font-size="11" text-anchor="middle">'+
-           (cfg.xFmt?cfg.xFmt(xv):xv.toFixed(0))+'</text>';
-  }
-  // series
-  cfg.series.forEach(function(s){
-    var d = "", started = false;
-    s.pts.forEach(function(p){
-      if(!isFinite(p[1])){ started = false; return; }
+      if(!num(p[1])){ started = false; return; }  // gap: break the line, don't drop to zero
       d += (started?"L":"M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1) + " ";
       started = true;
     });
