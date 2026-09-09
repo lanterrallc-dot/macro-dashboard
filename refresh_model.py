@@ -540,16 +540,37 @@ def usd_transmission(S, window=60):
 
     # Bands are deliberately wide: anything inside +/-0.2 is not a relationship
     # worth routing an investment rationale through, whichever way it leans.
-    if r60 >= 0.2:
+    #
+    # BOTH windows must agree before a state is declared. A 60-day reading
+    # sitting near the threshold will cross it on a few days of new data, and
+    # letting that alone flip the page's calls on and off would make the table
+    # noisier than the thing it measures. Requiring the 120-day window to
+    # confirm means a state change reflects a persistent shift, not a wobble.
+    # Anything unconfirmed falls through to 'decoupled', which withholds the
+    # dollar-routed calls — the conservative direction to fail in.
+    both = None if r120 is None else (r60, r120)
+    if both is None:
+        # Not enough history for the confirming window yet; decide on what
+        # exists rather than reporting nothing at all.
+        confirmed_up, confirmed_down = r60 >= 0.2, r60 <= -0.2
+        window_note = 'on the %d-session window alone (no 120-session history yet)' % window
+    else:
+        confirmed_up = r60 >= 0.2 and r120 >= 0.2
+        confirmed_down = r60 <= -0.2 and r120 <= -0.2
+        window_note = 'confirmed across both the %d- and 120-session windows' % window
+
+    if confirmed_up:
         state = 'intact'
-        label = 'Yields and the dollar are moving together, as the asset reasoning assumes.'
-    elif r60 <= -0.2:
+        label = ('Yields and the dollar are moving together, as the asset reasoning '
+                 'assumes (%s).' % window_note)
+    elif confirmed_down:
         state = 'inverted'
         label = ('Yields and the dollar are moving in OPPOSITE directions \u2014 the '
-                 'risk-premium regime, not the growth regime.')
+                 'risk-premium regime, not the growth regime (%s).' % window_note)
     else:
         state = 'decoupled'
-        label = 'No reliable relationship between yields and the dollar right now.'
+        label = ('No reliable relationship between yields and the dollar right now: '
+                 'the two windows do not agree, or both sit inside +/-0.20.')
 
     return {
         'r_60d': round(r60, 3),
@@ -557,6 +578,7 @@ def usd_transmission(S, window=60):
         'n': n60,
         'state': state,
         'label': label,
+        'confirmed': both is not None,
         'window_days': window,
         'series': ['DFII10', 'DTWEXBGS'],
     }
