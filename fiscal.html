@@ -87,6 +87,11 @@
   .slider label b{color:var(--text);font-weight:600}
   input[type=range]{width:100%;accent-color:var(--brass);margin-top:4px}
 
+  .mini{display:inline-block;width:8px;height:8px;border-radius:50%;
+        margin-right:3px;background:#2b3b53;vertical-align:middle}
+  .mini.on{background:var(--hot)}
+  .projnote{margin:12px 0 4px;padding:10px 14px;border:1px solid var(--rule);
+            background:var(--panel2);font-size:14.5px}
   .fail{color:var(--hot)}
   footer{margin-top:44px;font-size:13px;color:var(--dim);border-top:1px solid var(--rule);padding-top:16px}
   @media (max-width:760px){
@@ -178,13 +183,14 @@
   <div class="card">
     <div class="sliders" id="sliders"></div>
     <div style="margin-bottom:10px"><button id="resetScn">Reset to latest data</button></div>
+    <div class="projnote" id="projVerdict"></div>
     <div class="legend">
       <span><i class="swatch" style="background:var(--brass)"></i>Debt / GDP, %</span>
       <span><i class="swatch" style="background:var(--warm)"></i>Interest, % of GDP</span>
     </div>
     <div class="chart" id="chartProj"></div>
     <table style="margin-top:14px">
-      <thead><tr><th>Year</th><th>Effective rate</th><th>Debt / GDP</th><th>Interest, % of GDP</th><th>Interest, $tn</th></tr></thead>
+      <thead><tr><th>Year</th><th>Effective rate</th><th>Debt / GDP</th><th>Interest, % of GDP</th><th>Interest, $tn</th><th>Conditions</th></tr></thead>
       <tbody id="projTable"></tbody>
     </table>
   </div>
@@ -208,6 +214,7 @@ var FAILED = [];
 var Q = [];        // quarterly derived rows
 var latest = null;
 var scn = null;
+var liveConds = null;   // the four condition booleans as of the latest complete quarter
 
 /* ---------- small helpers ---------- */
 function el(id){ return document.getElementById(id); }
@@ -341,6 +348,7 @@ function band(v, watch, warn, alert){
   return "ok";
 }
 function dot(b){ return '<span class="dot s-'+b+'"></span>'; }
+function countBand(n){ return n>=4 ? "alert" : n===3 ? "warn" : n===2 ? "watch" : "ok"; }
 
 /* ---------- rendering ---------- */
 function render(){
@@ -417,6 +425,7 @@ function renderConditions(r, prior){
      met: intRising===true,
      a: fmt(r.intGdp,2,"% of GDP") + (prior? "  (" + signed(r.intGdp-prior.intGdp,2) + " y/y)" : "")}
   ];
+  liveConds = c.map(function(x){ return x.met === true; });
   var n = 0, html = "";
   for(var i=0;i<c.length;i++){
     if(c[i].met) n++;
@@ -668,16 +677,43 @@ function runScenario(){
 
   var years = 8;
   var ratio = latest.ratio, eff = latest.eff, gdp = latest.gdp;
-  var path = [{y:0, eff:eff, ratio:ratio, intGdp:eff/100*ratio, dollars:gdp*ratio/100*eff/100}];
+  var path = [{y:0, eff:eff, ratio:ratio, intGdp:eff/100*ratio,
+               dollars:gdp*ratio/100*eff/100,
+               // year 0 uses the live readings, so this row matches the strip
+               // at the top of the page rather than the slider settings
+               conds: liveConds ? liveConds.slice()
+                     : [latest.gap>=0, latest.primary>=3, latest.ratio>=100, false]}];
   for(var i=1;i<=years;i++){
+    var prevIntGdp = path[i-1].intGdp;
     eff = eff + (scn.refi/100)*(scn.market - eff);
     ratio = ratio + scn.primary + (eff - scn.growth)/100*ratio;
     gdp = gdp * (1 + scn.growth/100);
     var intGdp = eff/100*ratio;
-    path.push({y:i, eff:eff, ratio:ratio, intGdp:intGdp, dollars: gdp*ratio/100*eff/100});
+    path.push({y:i, eff:eff, ratio:ratio, intGdp:intGdp,
+               dollars: gdp*ratio/100*eff/100,
+               conds: [eff >= scn.growth,          // cost of money at or above growth
+                       scn.primary >= 3,           // primary deficit in the 3-5% zone
+                       ratio >= 100,               // debt above 100% of GDP
+                       intGdp > prevIntGdp]});     // interest expense still climbing
   }
+  path.forEach(function(p){
+    p.metCount = p.conds.reduce(function(a,b){ return a + (b?1:0); }, 0);
+  });
 
   var thisYear = new Date(latest.date).getUTCFullYear();
+  var LABELS = ["Effective rate at or above nominal growth",
+                "Primary deficit of 3% of GDP or more",
+                "Debt above 100% of GDP",
+                "Interest expense still climbing"];
+  function condDots(p){
+    var out = "";
+    for(var i=0;i<4;i++){
+      out += '<span class="mini' + (p.conds[i] ? " on" : "") +
+             '" title="' + LABELS[i] + ': ' + (p.conds[i] ? "met" : "not met") + '"></span>';
+    }
+    return out + ' <span class="t-' + countBand(p.metCount) + '">' + p.metCount + "/4</span>";
+  }
+
   var html = "";
   path.forEach(function(p){
     var b = band(p.intGdp, 2.5, 3, 4);
@@ -685,9 +721,37 @@ function runScenario(){
             "<td>" + fmt(p.eff,2,"%") + "</td>" +
             '<td class="num">' + fmt(p.ratio,1,"%") + "</td>" +
             '<td class="t-'+b+'">' + fmt(p.intGdp,2,"%") + "</td>" +
-            "<td>" + fmt(p.dollars/1000,2) + "</td></tr>";
+            "<td>" + fmt(p.dollars/1000,2) + "</td>" +
+            "<td>" + condDots(p) + "</td></tr>";
   });
   el("projTable").innerHTML = html;
+
+  // Say in words when the configuration arrives, rather than leaving it to be
+  // read off eight rows of dots.
+  var firstFour = null, firstThree = null, peak = 0;
+  path.forEach(function(p){
+    if(p.metCount > peak) peak = p.metCount;
+    if(firstFour === null && p.metCount === 4) firstFour = p.y;
+    if(firstThree === null && p.metCount >= 3) firstThree = p.y;
+  });
+  function yearName(y){ return y===0 ? "already, on the live readings" : "in " + (thisYear + y); }
+  var verdict;
+  if(firstFour !== null){
+    verdict = '<b class="t-alert">All four conditions are met ' + yearName(firstFour) + '.</b> ' +
+      "On these settings the debt costs more than the economy grows, the primary deficit sits in " +
+      "the danger band, the ratio is above 100%, and interest expense is still rising — the " +
+      "configuration where the rate needed to hold inflation down starts to exceed what the " +
+      "fiscal accounts tolerate.";
+  } else if(firstThree !== null){
+    verdict = '<b class="t-warn">Three of four conditions are met ' + yearName(firstThree) + '</b>, ' +
+      "and the fourth does not trip within eight years on these settings.";
+  } else {
+    verdict = '<b class="t-ok">The four conditions never line up within eight years here.</b> ' +
+      "The most that are met at once is " + peak + ".";
+  }
+  el("projVerdict").innerHTML = verdict +
+    ' <span class="note">Dots read left to right: rate vs growth, primary deficit, ' +
+    'debt ratio, interest trend.</span>';
 
   chart(el("chartProj"), {
     aria:"Projected debt ratio and interest burden", height:240,
