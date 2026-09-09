@@ -1002,6 +1002,14 @@ async function tryLoadBacktest(){
   }catch(e){ return null; }
 }
 
+// Fewest regime episodes an asset needs before its hit rate is worth printing.
+// Most rows run n=6; at that size the 95% interval on 1-of-6 runs roughly
+// 0.4%-64% and on 5-of-6 roughly 36%-100%, overlapping almost entirely, so the
+// figures cannot be told apart from each other or from chance. Module scope
+// because renderAssetOutlook uses it in the banner before the row loop.
+// Raise this if the backtest window lengthens.
+const MIN_REPORTABLE_N = 20;
+
 function renderAssetOutlook(outlook){
   const section = document.getElementById('assetOutlookSection');
   if(!outlook || !outlook.assets){ section.style.display='none'; return; }
@@ -1037,7 +1045,11 @@ function renderAssetOutlook(outlook){
       `not against 50%, because beating a coin flip on an asset that rises 58% of the time is not skill. ` +
       `The per-day figure (${nm && bt.old_model && bt.old_model.overall_hit_rate!==null ? (bt.old_model.overall_hit_rate*100).toFixed(0)+'%' : 'n/a'}, ` +
       `n=${bt.old_model?bt.old_model.total:0}) is kept only for comparison with the earlier run; its sample is ` +
-      `overlapping and inflated. Run as of ${genAt}.`;
+      `overlapping and inflated. ` +
+      `Rows with fewer than ${MIN_REPORTABLE_N} episodes show no percentage at all: at those sample ` +
+      `sizes the confidence intervals overlap almost completely, so the figures cannot be told apart ` +
+      `from each other or from chance. The direction still shows, as the workbook's prior. ` +
+      `Run as of ${genAt}.`;
   } else {
     accCol.style.display='none';
     banner.style.display='';
@@ -1052,7 +1064,15 @@ function renderAssetOutlook(outlook){
     let accCell = '';
     if(bt && newAssetStats && newAssetStats[a.name]){
       const stat = newAssetStats[a.name];
-      if(stat.hit_rate!==null){
+      if(stat.hit_rate!==null && (stat.total||0) < MIN_REPORTABLE_N){
+        // Below this many episodes the confidence interval spans most of the
+        // 0-100 range, so 17% and 83% are not distinguishable from each other
+        // or from chance. Printing them invites reading noise as evidence, so
+        // the direction (a prior from the workbook) stays and the number goes.
+        accCell = `<td class="mono-val col-narrow" style="color:var(--muted-dim)">n/a`
+          + `<div style="color:var(--muted-dim); font-size:10px; font-weight:400;">`
+          + `sample too small · n=${stat.total||0}</div></td>`;
+      } else if(stat.hit_rate!==null){
         // Edge over the asset's own base rate is the honest number; the raw
         // hit rate on its own flatters anything with an upward drift.
         const edge = stat.edge;
