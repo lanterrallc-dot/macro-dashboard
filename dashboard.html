@@ -757,14 +757,27 @@ function usdTransmissionFrom(S){
   const [r60,n60] = corrOver(60);
   const [r120] = corrOver(120);
   if(r60===null) return null;
-  const state = r60>=0.2 ? 'intact' : r60<=-0.2 ? 'inverted' : 'decoupled';
+
+  // BOTH windows must agree before a state is declared. A 60-day reading near
+  // the threshold crosses it on a few days of new data, and letting that alone
+  // flip the table's calls on and off would be noisier than the thing being
+  // measured. Unconfirmed falls through to 'decoupled', which withholds the
+  // dollar-routed calls — the conservative direction to fail in.
+  const confirmed = r120 !== null;
+  const up   = confirmed ? (r60 >= 0.2 && r120 >= 0.2) : (r60 >= 0.2);
+  const down = confirmed ? (r60 <= -0.2 && r120 <= -0.2) : (r60 <= -0.2);
+  const windowNote = confirmed
+    ? 'confirmed across both the 60- and 120-session windows'
+    : 'on the 60-session window alone (no 120-session history yet)';
+
+  const state = up ? 'intact' : down ? 'inverted' : 'decoupled';
   const label = state==='intact'
-    ? 'Yields and the dollar are moving together, as the asset reasoning assumes.'
+    ? `Yields and the dollar are moving together, as the asset reasoning assumes (${windowNote}).`
     : state==='inverted'
-      ? 'Yields and the dollar are moving in OPPOSITE directions \u2014 the risk-premium regime, not the growth regime.'
-      : 'No reliable relationship between yields and the dollar right now.';
+      ? `Yields and the dollar are moving in OPPOSITE directions \u2014 the risk-premium regime, not the growth regime (${windowNote}).`
+      : 'No reliable relationship between yields and the dollar right now: the two windows do not agree, or both sit inside \u00b10.20.';
   return {r_60d:+r60.toFixed(3), r_120d: r120===null?null:+r120.toFixed(3),
-          n:n60, state, label, window_days:60, series:['DFII10','DTWEXBGS']};
+          n:n60, state, label, confirmed, window_days:60, series:['DFII10','DTWEXBGS']};
 }
 
 function buildAssetOutlook(regime){
@@ -1120,7 +1133,8 @@ function renderAssetOutlook(outlook, usdT){
           ? `The dollar-routed rationales below are on their intended footing.`
           : `<b>${withdrawnCount} rows below justify their direction through the dollar and now show NO CALL</b> — ` +
             `the direction is withheld rather than asserted on a premise that is not holding. ` +
-            `Bands: an absolute correlation under 0.20 is treated as no relationship.`);
+            `A state is only declared when both windows clear \u00b10.20 in the same direction, ` +
+            `so a call comes back only on a persistent shift, not a few days of data.`);
     }
   }
 
