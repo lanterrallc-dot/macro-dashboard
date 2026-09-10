@@ -1123,6 +1123,23 @@ function renderAssetOutlook(outlook, usdT){
     banner.innerHTML = `<b style="color:var(--watch)">Not yet backtested</b> — these are regime-conditioned historical tendencies transcribed from the source workbook, not verified against real returns. Run the <code style="background:var(--panel); padding:1px 5px; border-radius:4px;">backtest</code> workflow from the Actions tab to fill this in.`;
   }
 
+  // Most rows in ASSET_TABLE justify their direction through the dollar
+  // ("USD funding", "USD inverse", "Strong USD can..."). Those rationales are
+  // only valid while yields and the dollar actually move together. When the
+  // measured channel is decoupled or inverted, the honest call is no call:
+  // withdraw the direction rather than print one whose premise has failed.
+  // The U.S. Dollar row is exempt — it IS the dollar, not a transmission from it.
+  //
+  // Declared as a function, not a const arrow: the channel note below calls it
+  // ABOVE this point, and a const would still be in the temporal dead zone
+  // there, throwing a ReferenceError that killed the whole section. Function
+  // declarations hoist, so the early call works.
+  const channelBroken = !!usdT && usdT.state !== 'intact';
+  function routesThroughUSD(a){
+    return a.name !== 'U.S. Dollar' &&
+      /usd|dollar/i.test((a.fxTransmission||'') + ' ' + (a.interpretation||''));
+  }
+
   // State the channel plainly before the table, since it now determines which
   // rows carry a direction at all.
   const chanEl = document.getElementById('usdChannelNote');
@@ -1150,16 +1167,6 @@ function renderAssetOutlook(outlook, usdT){
   }
 
   const body = document.getElementById('assetOutlookBody'); body.innerHTML='';
-  // Most rows in ASSET_TABLE justify their direction through the dollar
-  // ("USD funding", "USD inverse", "Strong USD can..."). Those rationales are
-  // only valid while yields and the dollar actually move together. When the
-  // measured channel is decoupled or inverted, the honest call is no call:
-  // withdraw the direction rather than print one whose premise has failed.
-  // The U.S. Dollar row is exempt — it IS the dollar, not a transmission from it.
-  const channelBroken = !!usdT && usdT.state !== 'intact';
-  const routesThroughUSD = a =>
-    a.name !== 'U.S. Dollar' &&
-    /usd|dollar/i.test((a.fxTransmission||'') + ' ' + (a.interpretation||''));
 
   outlook.assets.forEach(a=>{
     const withdrawn = channelBroken && routesThroughUSD(a);
@@ -1230,7 +1237,7 @@ const ASSET_RISK_MAP_JS = {
 const RISK_METRIC_COLOR = {
   'Liquidity':'#f2954a','Credit':'#33c481','Rates':'#e8b93f','Market / Macro':'#e8b93f',
   'Inflationary Pressure':'#c084fc','FX Stress':'#43c6e0','overall_risk':'#e8b93f',
-  'Fed Balance Sheet':'#43c6e0',
+  'Fed Balance Sheet':'#43c6e0','Real Yield':'#c084fc',
 };
 // The one pairing above with a real, out-of-sample-validated relationship
 // (not just an editorial grouping) — see derive_asset_signals.py.
