@@ -365,6 +365,7 @@ const HISTORY = [{"date": "2024-09-30", "sp500": 100, "risk": 47.68}, {"date": "
 /* Plain-English name for each FRED code, so the raw-data table reads as
    data rather than as tickers. */
 const SERIES_LABEL = {
+  'PCETRIM1M158SFRBDAL':'Trimmed-mean PCE, 1-month annualised',
   CPILFESL:'Core CPI, seasonally adjusted', PCEPILFE:'Core PCE price index',
   ICSA:'Initial jobless claims', DFII10:'10-year real (TIPS) yield',
   T10Y3M:'10-year minus 3-month spread', RRPONTSYD:'Overnight reverse repo ($bn)',
@@ -406,7 +407,7 @@ function riskBand(s){ if(s===null||s===undefined) return '—'; if(s<25) return 
 function num(v,d=2){ return (v===null||v===undefined||isNaN(v)) ? '—' : v.toLocaleString('en-US',{maximumFractionDigits:d}); }
 
 /* ============ FRED fetch layer ============ */
-const SERIES = ['CPILFESL','PCEPILFE','ICSA','BAMLH0A0HYM2','BAMLC0A0CM','SOFR','IORB','VIXCLS','DGS2','DGS10','DFII10','T10Y3M','DTWEXBGS','WALCL','WRESBAL','WTREGEN','RRPONTSYD','NFCI','EFFR','SOFR25','SOFR75','DEXJPUS','DEXUSEU','DEXCHUS','DEXSZUS','DEXUSAL'];
+const SERIES = ['CPILFESL','PCEPILFE','PCETRIM1M158SFRBDAL','ICSA','BAMLH0A0HYM2','BAMLC0A0CM','SOFR','IORB','VIXCLS','DGS2','DGS10','DFII10','T10Y3M','DTWEXBGS','WALCL','WRESBAL','WTREGEN','RRPONTSYD','NFCI','EFFR','SOFR25','SOFR75','DEXJPUS','DEXUSEU','DEXCHUS','DEXSZUS','DEXUSAL'];
 
 const PROXY = url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
 
@@ -551,7 +552,17 @@ function computeModel(S, E){
   const cpiCore=L('CPILFESL'), cpiCoreP1=P1('CPILFESL'), pceCore=L('PCEPILFE'), pceCoreP1=P1('PCEPILFE');
   const coreCpiMo = (cpiCore!==null&&cpiCoreP1!==null) ? (cpiCore/cpiCoreP1-1)*100 : null;
   const corePceMo = (pceCore!==null&&pceCoreP1!==null) ? (pceCore/pceCoreP1-1)*100 : null;
-  const inflationLaborScore = (coreCpiMo!==null&&corePceMo!==null) ? clamp(50+((coreCpiMo*0.5+corePceMo*0.5)-0.2)*200,0,100) : null;
+  // Trimmed mean arrives ANNUALISED in percent, not as an index level, so it is
+  // de-annualised before blending. Mirror of compute_model() in
+  // refresh_model.py — the weights must match there or the durable feed and the
+  // in-browser fallback will disagree.
+  const trimAnn = L('PCETRIM1M158SFRBDAL');
+  const trimMo = trimAnn!==null ? (Math.pow(1+trimAnn/100, 1/12)-1)*100 : null;
+  const inflBlend = (coreCpiMo!==null&&corePceMo!==null)
+    ? (trimMo!==null ? coreCpiMo*0.35 + corePceMo*0.35 + trimMo*0.30
+                     : coreCpiMo*0.5 + corePceMo*0.5)
+    : null;
+  const inflationLaborScore = inflBlend!==null ? clamp(50+(inflBlend-0.2)*200,0,100) : null;
 
   const fedExpScore = (y2Score!==null&&sofrIorbScore!==null) ? 0.6*y2Score+0.4*sofrIorbScore : null;
 
@@ -631,8 +642,8 @@ function computeModel(S, E){
     {name:'Financial Conditions (NFCI)', category:'Market / Macro', weight:.04, reading:nfci, units:'index', score:nfciScore, ids:['NFCI']},
     {name:'Jobless Claims Momentum', category:'Market / Macro', weight:.03, reading:econSurpriseScore, units:'0–100', score:econSurpriseScore, ids:['ICSA'],
      flag:'Renamed from “Economic Surprise”. A surprise index measures data against consensus forecasts; this measures claims against their own recent level.'},
-    {name:'Inflation Momentum', category:'Market / Macro', weight:.03, reading:inflationLaborScore, units:'0–100', score:inflationLaborScore, ids:['CPILFESL','PCEPILFE'],
-     flag:'Renamed from “Inflation & Labor Momentum”. No labour series ever fed it.'},
+    {name:'Inflation Momentum', category:'Market / Macro', weight:.03, reading:inflationLaborScore, units:'0–100', score:inflationLaborScore, ids:['CPILFESL','PCEPILFE','PCETRIM1M158SFRBDAL'],
+     flag:'Renamed from “Inflation & Labor Momentum”. No labour series ever fed it. Now blends the Dallas Fed trimmed mean, which drops the biggest movers in each tail every month instead of always removing food and energy.'},
     {name:'SOFR–IORB Spread', category:'Liquidity', weight:0, reading:sofrIorbBps, units:'bps', score:sofrIorbScore, ids:['SOFR','IORB'], redundant:'folded into Repo-Market Stress (45% of that composite)'},
     {name:'Bank Reserves', category:'Liquidity', weight:0, reading:wresbal, units:'$mm', score:reservesScore, ids:['WRESBAL'], redundant:'a liability of the same balance sheet Fed Net Liquidity already measures — shown for reference, not scored'},
   ];
