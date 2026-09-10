@@ -29,7 +29,12 @@ FRED_API_KEY = os.environ.get('FRED_API_KEY', '').strip()
 # RRPONTSYD (reverse repo — without it the net-liquidity figure was missing
 # a facility that held over $2trn at its peak), and T10Y3M.
 FRED_SERIES = [
-    'CPILFESL', 'PCEPILFE', 'ICSA',
+    # PCETRIM1M158SFRBDAL is the Dallas Fed trimmed-mean PCE, 1-month rate,
+    # already ANNUALISED in percent — unlike CPILFESL/PCEPILFE, which are index
+    # levels. It drops the largest movers in each tail every month rather than
+    # always removing food and energy, so a single volatile category cannot
+    # swing the trend read the way it can in a conventional core measure.
+    'CPILFESL', 'PCEPILFE', 'PCETRIM1M158SFRBDAL', 'ICSA',
     'BAMLH0A0HYM2', 'BAMLC0A0CM', 'SOFR', 'IORB', 'VIXCLS', 'DGS2',
     'DGS10', 'DFII10', 'T10Y3M', 'DTWEXBGS', 'WALCL', 'WRESBAL', 'WTREGEN',
     'RRPONTSYD', 'NFCI', 'EFFR', 'SOFR25', 'SOFR75', 'DEXJPUS', 'DEXUSEU',
@@ -661,9 +666,22 @@ def compute_model(S, E):
     pceCore, pceCoreP1 = L('PCEPILFE'), P1('PCEPILFE')
     coreCpiMo = (cpiCore / cpiCoreP1 - 1) * 100 if None not in (cpiCore, cpiCoreP1) and cpiCoreP1 else None
     corePceMo = (pceCore / pceCoreP1 - 1) * 100 if None not in (pceCore, pceCoreP1) and pceCoreP1 else None
+
+    # Trimmed mean arrives as an annualised rate; de-annualise so all three legs
+    # are the same monthly quantity before blending.
+    trimAnn = L('PCETRIM1M158SFRBDAL')
+    trimMo = ((1 + trimAnn / 100.0) ** (1.0 / 12) - 1) * 100 if trimAnn is not None else None
+
     inflationLaborScore = None
     if None not in (coreCpiMo, corePceMo):
-        inflationLaborScore = clamp(50 + ((coreCpiMo * 0.5 + corePceMo * 0.5) - 0.2) * 200, 0, 100)
+        if trimMo is not None:
+            # Trimmed mean gets the largest single share: it is the better trend
+            # estimator of the three, but keeping CPI and PCE in means the score
+            # still moves when a headline print surprises.
+            blend = coreCpiMo * 0.35 + corePceMo * 0.35 + trimMo * 0.30
+        else:
+            blend = coreCpiMo * 0.5 + corePceMo * 0.5
+        inflationLaborScore = clamp(50 + (blend - 0.2) * 200, 0, 100)
 
     fedExpScore = 0.6 * y2Score + 0.4 * sofrIorbScore if None not in (y2Score, sofrIorbScore) else None
 
@@ -821,11 +839,13 @@ def compute_model(S, E):
                     calc('5-week change', claimsChgPct, '%')],
          'flag': 'Renamed from \u201cEconomic Surprise\u201d. A surprise index measures data against consensus forecasts; this measures claims against their own recent level, so the old name overstated it.'},
         {'name': 'Inflation Momentum', 'category': 'Market / Macro', 'weight': WEIGHTS['Inflation Momentum'][1], 'reading': inflationLaborScore, 'units': '0\u2013100', 'score': inflationLaborScore,
-         'formula': 'clamp(50 + ((core CPI m/m \u00d7 0.5 + core PCE m/m \u00d7 0.5) \u2212 0.2) \u00d7 200, 0, 100). Reads 50 at 0.2% monthly, roughly the 2% annual target.',
+         'formula': 'clamp(50 + ((core CPI m/m \u00d7 0.35 + core PCE m/m \u00d7 0.35 + trimmed-mean PCE m/m \u00d7 0.30) \u2212 0.2) \u00d7 200, 0, 100). Reads 50 at 0.2% monthly, roughly the 2% annual target. Falls back to a 50/50 CPI-PCE blend if the trimmed mean is unavailable.',
          'inputs': [raw('CPILFESL', 'Core CPI index'), lag('CPILFESL', 1, 'Core CPI, prior month'),
                     raw('PCEPILFE', 'Core PCE index'), lag('PCEPILFE', 1, 'Core PCE, prior month'),
-                    calc('core CPI m/m', coreCpiMo, '%'), calc('core PCE m/m', corePceMo, '%')],
-         'flag': 'Renamed from \u201cInflation & Labor Momentum\u201d. No labour series ever fed it.'},
+                    raw('PCETRIM1M158SFRBDAL', 'Trimmed-mean PCE, 1-month annualised'),
+                    calc('core CPI m/m', coreCpiMo, '%'), calc('core PCE m/m', corePceMo, '%'),
+                    calc('trimmed-mean PCE m/m', trimMo, '%')],
+         'flag': 'Renamed from \u201cInflation & Labor Momentum\u201d. No labour series ever fed it. Now blends the Dallas Fed trimmed mean, which drops the biggest movers in each tail every month instead of always removing food and energy.'},
         {'name': 'SOFR\u2013IORB Spread', 'category': 'Liquidity', 'weight': 0, 'reading': sofrIorbBps, 'units': 'bps', 'score': sofrIorbScore, 'redundant': 'folded into Repo-Market Stress (45% of that composite)',
          'formula': 'clamp(50 + (SOFR \u2212 IORB in bps) \u00d7 4, 0, 100)',
          'inputs': [raw('SOFR', 'Secured Overnight Financing Rate'), raw('IORB', 'Interest on Reserve Balances'),
@@ -968,13 +988,24 @@ def compute_model(S, E):
             f'clamp(50 + {f(claimsChgPct)} \u00d7 5) = {f(econSurpriseScore)}',
         ]
     if None not in (coreCpiMo, corePceMo):
-        blend = coreCpiMo * 0.5 + corePceMo * 0.5
-        step_map['Inflation Momentum'] = [
+        steps = [
             f'core CPI {f(cpiCore,3)} vs {f(cpiCoreP1,3)} last month = {f(coreCpiMo,3)}% m/m',
             f'core PCE {f(pceCore,3)} vs {f(pceCoreP1,3)} last month = {f(corePceMo,3)}% m/m',
-            f'blend = ({f(coreCpiMo,3)} + {f(corePceMo,3)}) \u00f7 2 = {f(blend,3)}%',
-            f'clamp(50 + ({f(blend,3)} \u2212 0.2) \u00d7 200) = {f(inflationLaborScore)}',
         ]
+        if trimMo is not None:
+            blend = coreCpiMo * 0.35 + corePceMo * 0.35 + trimMo * 0.30
+            steps += [
+                f'trimmed-mean PCE {f(trimAnn,2)}% annualised \u2192 de-annualised '
+                f'(1 + {f(trimAnn,2)}/100)^(1/12) \u2212 1 = {f(trimMo,3)}% m/m',
+                f'blend = 0.35\u00d7{f(coreCpiMo,3)} + 0.35\u00d7{f(corePceMo,3)} '
+                f'+ 0.30\u00d7{f(trimMo,3)} = {f(blend,3)}%',
+            ]
+        else:
+            blend = coreCpiMo * 0.5 + corePceMo * 0.5
+            steps += [f'trimmed mean unavailable \u2014 falling back to a 50/50 blend',
+                      f'blend = ({f(coreCpiMo,3)} + {f(corePceMo,3)}) \u00f7 2 = {f(blend,3)}%']
+        steps.append(f'clamp(50 + ({f(blend,3)} \u2212 0.2) \u00d7 200) = {f(inflationLaborScore)}')
+        step_map['Inflation Momentum'] = steps
 
     for ind in indicators:
         ind['steps'] = step_map.get(ind['name'], [])
@@ -1173,7 +1204,13 @@ def score_all_asof(S, E, date):
     if None not in (cpiCore, cpiCoreP1, pceCore, pceCoreP1) and cpiCoreP1 and pceCoreP1:
         coreCpiMo = (cpiCore/cpiCoreP1 - 1) * 100
         corePceMo = (pceCore/pceCoreP1 - 1) * 100
-        inflationLaborScore = clamp(50 + ((coreCpiMo*0.5 + corePceMo*0.5) - 0.2)*200, 0, 100)
+        # same three-leg blend as compute_model(), so reconstructed history
+        # cannot drift from the live score
+        trimAnn = L('PCETRIM1M158SFRBDAL')
+        trimMo = ((1 + trimAnn/100.0) ** (1.0/12) - 1) * 100 if trimAnn is not None else None
+        blend = (coreCpiMo*0.35 + corePceMo*0.35 + trimMo*0.30) if trimMo is not None \
+            else (coreCpiMo*0.5 + corePceMo*0.5)
+        inflationLaborScore = clamp(50 + (blend - 0.2)*200, 0, 100)
 
     spyL, spyP5, spyP20 = EL('SPY'), EP5('SPY'), EP20('SPY')
     rspL, rspP5, rspP20 = EL('RSP'), EP5('RSP'), EP20('RSP')
