@@ -123,6 +123,180 @@ def build_real_yields(R):
     return list(rows.values())
 
 
+# --- Commercial paper ----------------------------------------------------
+# Daily CP rates from the Federal Reserve, via FRED. Two publications carry
+# the same market: the H.15 series (DCPN30, DCPF1M, DCPN3M, DCPF3M) and the
+# Commercial Paper release (the RIFSPP* codes). Both are quoted on a
+# discount basis, so the spreads below are like-for-like.
+#
+# The number worth watching is the 30-day A2/P2 minus AA nonfinancial
+# spread: what a lower-rated non-financial borrower pays over the best-rated
+# one for the same money at the same tenor. It sits in a narrow band in calm
+# markets and widens fast when short-term credit starts to close — it moved
+# early in both 2008 and March 2020.
+#
+# Deliberately NOT scored into Overall Risk. A fourteenth weighted indicator
+# would move the headline number and invalidate the existing backtest, and
+# this is a monitor, not a model input. It sits alongside the real-yield
+# panel as a read-only section.
+#
+# RIFSPPNAAD30NB is the Commercial Paper release's own AA nonfinancial
+# 30-day rate, preferred for the spread so both legs come from the same
+# publication. If it doesn't return, the code falls back to the H.15
+# equivalent (DCPN30) — same underlying market, same basis — and reports
+# which leg it used in the output.
+#
+# These series have real holes: on days when trade volume is too thin to
+# support a calculation the Fed publishes nothing, and FRED returns '.',
+# which fetch_fred_series() already drops. Values are forward-filled onto a
+# shared date axis for charting, and each row's own last real observation
+# date is reported separately so a stale leg stays visible instead of
+# masquerading as a flat line.
+CP_SERIES_META = {
+    'DCPN30': '30-day AA nonfinancial (H.15)',
+    'DCPF1M': '30-day AA financial (H.15)',
+    'DCPN3M': '90-day AA nonfinancial (H.15)',
+    'DCPF3M': '90-day AA financial (H.15)',
+    'RIFSPPNA2P2D30NB': '30-day A2/P2 nonfinancial (CP release)',
+    'RIFSPPNAAD30NB': '30-day AA nonfinancial (CP release)',
+    'DTB3': '3-month Treasury bill, secondary market',
+}
+
+# Four lines on the chart; everything fetched appears in the table below it.
+# Colours are taken from the palette the rest of the page already uses.
+CP_CHART_LINES = [
+    ('DCPN30', '30-day AA nonfinancial', '#5b8def'),
+    ('DCPF1M', '30-day AA financial', '#43c6e0'),
+    ('RIFSPPNA2P2D30NB', '30-day A2/P2 nonfinancial', '#e8b93f'),
+    ('DCPN3M', '90-day AA nonfinancial', '#8b96a8'),
+]
+
+CP_TABLE_ORDER = ['DCPN30', 'DCPF1M', 'RIFSPPNA2P2D30NB', 'RIFSPPNAAD30NB',
+                  'DCPN3M', 'DCPF3M', 'DTB3']
+
+
+def cp_forward_fill(arr, dates):
+    """Carries a series' last known value forward onto a shared date axis, so
+    every line in the panel is the same length and indexed identically. Same
+    fix the per-asset charts already use, for the same reason: Chart.js
+    silently mis-renders a sparse series plotted against a denser category
+    axis, and these CP series are sparse in exactly that way."""
+    out, i, last = [], 0, None
+    for d in dates:
+        while i < len(arr) and arr[i]['date'] <= d:
+            last = arr[i]['value']
+            i += 1
+        out.append(last)
+    return out
+
+
+def build_commercial_paper(C, max_points=520):
+    """C = dict of fetched CP series arrays. Returns None when nothing came
+    back, so the dashboard shows its 'needs the server feed' note rather than
+    an empty chart frame."""
+    have = {sid: arr for sid, arr in C.items() if arr}
+    if not have:
+        return None
+
+    dates = sorted({p['date'] for arr in have.values() for p in arr})[-max_points:]
+    filled = {sid: cp_forward_fill(arr, dates) for sid, arr in have.items()}
+    last_real = {sid: arr[-1]['date'] for sid, arr in have.items()}
+
+    def bps_chg(vals, back):
+        """Change over `back` observations, in basis points. These series are
+        in percent, so a move from 3.73 to 3.75 is 2bp, not 0.02."""
+        if not vals or vals[-1] is None:
+            return None
+        i = len(vals) - 1 - back
+        if i < 0 or vals[i] is None:
+            return None
+        return round((vals[-1] - vals[i]) * 100, 1)
+
+    lines = []
+    for sid, label, color in CP_CHART_LINES:
+        vals = filled.get(sid)
+        if not vals:
+            continue
+        lines.append({
+            'id': sid, 'label': label, 'color': color, 'values': vals,
+            'latest': vals[-1], 'latest_date': last_real.get(sid),
+            'chg_1': bps_chg(vals, 1), 'chg_20': bps_chg(vals, 20),
+        })
+
+    def spread_block(hi_id, lo_id, label, description):
+        """Spread between two CP legs, in basis points, with its own history
+        so the chart can plot it and percentile_score() can say where today
+        sits in its own recent range."""
+        hi, lo = filled.get(hi_id), filled.get(lo_id)
+        if not hi or not lo:
+            return None
+        vals = [round((a - b) * 100, 1) if None not in (a, b) else None
+                for a, b in zip(hi, lo)]
+        hist = [{'date': d, 'value': v} for d, v in zip(dates, vals) if v is not None]
+        if not hist:
+            return None
+        cur = hist[-1]['value']
+        window = [p['value'] for p in hist][-500:]
+        return {
+            'label': label, 'description': description, 'values': vals,
+            'latest': cur,
+            # the spread is only as current as its staler leg
+            'latest_date': min(last_real.get(hi_id, ''), last_real.get(lo_id, '')),
+            'chg_1': round(cur - vals[-2], 1) if len(vals) > 1 and vals[-2] is not None else None,
+            'chg_20': round(cur - vals[-21], 1) if len(vals) > 20 and vals[-21] is not None else None,
+            'percentile': percentile_score(cur, hist, window=500),
+            'min': min(window), 'max': max(window),
+            'legs': [hi_id, lo_id],
+        }
+
+    aa_leg = next((s for s in ('RIFSPPNAAD30NB', 'DCPN30') if s in filled), None)
+    spread = spread_block(
+        'RIFSPPNA2P2D30NB', aa_leg,
+        'A2/P2 \u2212 AA, 30-day',
+        'What a lower-rated non-financial borrower pays over the best-rated one for the '
+        'same money at the same tenor \u2014 the standard commercial-paper credit-stress '
+        'gauge.') if aa_leg else None
+
+    bill_spread = spread_block(
+        'DCPN3M', 'DTB3',
+        'CP \u2212 T-bill, 90-day',
+        'AA nonfinancial paper over the 3-month Treasury bill: the premium for unsecured '
+        'corporate funding against the risk-free alternative at the same tenor.')
+
+    table = []
+    for sid in CP_TABLE_ORDER:
+        vals = filled.get(sid)
+        if not vals:
+            continue
+        window = [v for v in vals if v is not None]
+        table.append({
+            'id': sid, 'label': CP_SERIES_META.get(sid, sid),
+            'latest': vals[-1], 'latest_date': last_real.get(sid),
+            'chg_1': bps_chg(vals, 1), 'chg_20': bps_chg(vals, 20),
+            'min': min(window) if window else None,
+            'max': max(window) if window else None,
+            'obs': len(have[sid]),
+        })
+
+    return {
+        'dates': dates,
+        'lines': lines,
+        'spread': spread,
+        'bill_spread': bill_spread,
+        'table': table,
+        'aa_leg_used': aa_leg,
+        'note': (
+            'Commercial paper rates from the Federal Reserve via FRED, quoted on a discount '
+            'basis. The release is posted once daily at about 1pm ET, so this panel changes '
+            'once a day even though the rest of the page refreshes every 15 minutes \u2014 '
+            '\u201clive\u201d here means the latest published day, not intraday. On days when '
+            'trade volume is too thin to support a calculation the Fed publishes no rate at '
+            'all; those gaps are carried forward on the chart, and every row shows its own '
+            'last real observation date so a stale leg stays visible. Monitoring only: this '
+            'panel is not scored into the Overall Risk number above.'),
+    }
+
+
 STOOQ_TICKERS = {'SPY': 'SPY', 'RSP': 'RSP'}  # kept name for minimal downstream diff; now yfinance symbols
 
 UA = {'User-Agent': 'Mozilla/5.0 (macro-liquidity-model-refresh)'}
@@ -1366,6 +1540,21 @@ def main():
     ok = sum(1 for a in R.values() if a)
     print(f'  real-yield panel: {ok}/{len(optional_ids)} series returned data')
 
+    # Commercial paper — same deal: optional, fetched after the guard, and a
+    # failure here degrades one panel rather than blocking the whole refresh.
+    # ~2.5 years of history is plenty for the chart's longest range and for
+    # the 500-observation percentile window on the spread.
+    print('Fetching commercial-paper series (optional \u2014 failures are tolerated)...')
+    C = {}
+    for sid in CP_SERIES_META:
+        arr = fetch_fred_series(sid, days_back=900)
+        C[sid] = arr
+        if not arr:
+            print(f'  {sid}: unavailable (skipped)')
+        time.sleep(0.4)
+    cp_ok = sum(1 for a in C.values() if a)
+    print(f'  commercial paper: {cp_ok}/{len(CP_SERIES_META)} series returned data')
+
     print('Fetching equity/asset price data (yfinance, single bulk call)...')
     all_yf_tickers = sorted(set(list(STOOQ_TICKERS.values()) + list(STOOQ_ASSET_MAP.values())))
     yf_data = fetch_yfinance_bulk(all_yf_tickers, days_back=220)
@@ -1425,6 +1614,20 @@ def main():
         'not for timing. Currency moves are 60 business days, shown as the foreign '
         'currency\u2019s gain against the dollar.')
     print(f'  real-yield panel: {len(real_rows)} of {len(REAL_YIELD_MARKETS)} countries built')
+
+    model['commercial_paper'] = build_commercial_paper(C)
+    cp = model['commercial_paper']
+    if cp and cp.get('spread'):
+        sp = cp['spread']
+        pct = sp['percentile']
+        print(f"  commercial paper: A2/P2 \u2212 AA 30-day spread {sp['latest']}bp"
+              + (f" ({pct:.0f}th percentile of its own 500-day range)" if pct is not None else '')
+              + f", AA leg from {cp['aa_leg_used']}")
+    elif cp:
+        print('  commercial paper: panel built, but the A2/P2 spread leg was unavailable')
+    else:
+        print('  commercial paper: no data this run \u2014 the panel will show as unavailable')
+
     model['price_history_note'] = ('Daily closing prices and a daily-resolution reconstruction of the risk '
                                     'scores, both refreshed on this 15-minute schedule. Each asset is charted '
                                     'against a risk sub-metric grouping — but a rigorous out-of-sample test '
