@@ -95,6 +95,12 @@
   .chart-legend-row i{width:14px; height:3px; border-radius:2px; display:inline-block;}
   .chart-container{height:320px; position:relative;}
 
+  /* range switcher for the commercial-paper chart */
+  .range-row{display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;}
+  .range-row button{font-family:var(--mono); font-size:10.5px; letter-spacing:0.03em; padding:5px 12px; border-radius:20px; border:1px solid var(--hair); background:transparent; color:var(--muted); cursor:pointer; transition:color .15s ease, border-color .15s ease, background .15s ease;}
+  .range-row button:hover{color:var(--text); border-color:var(--muted-dim);}
+  .range-row button.on{border-color:var(--live); color:var(--live); background:rgba(67,198,224,0.08);}
+
   .table-card{background:var(--panel); border:1px solid var(--hair); border-radius:16px; overflow:hidden;}
   .table-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch;}
   table{width:100%; border-collapse:collapse; min-width:640px;}
@@ -324,6 +330,38 @@
         </table>
       </div>
       <div class="scroll-hint">← swipe to see more →</div>
+    </div>
+  </div>
+
+  <div class="section" id="cpSection">
+    <div class="section-head">
+      <h2>Commercial paper</h2>
+      <div class="sub" id="cpStatus">—</div>
+      <div style="flex-basis:100%; font-size:12.5px; color:var(--muted);">Short-term unsecured corporate funding. The A2/P2 minus AA spread is the one to watch: narrow and uneventful most of the time, and among the first things to move when short-term credit starts to close.</div>
+    </div>
+    <div class="chart-card">
+      <div id="cpNote" class="disclaimer" style="margin-top:0; margin-bottom:16px;"></div>
+      <div class="subscore-grid" id="cpStatRow" style="margin-bottom:18px;"></div>
+      <div class="chart-legend-row" id="cpLegend"></div>
+      <div class="range-row" id="cpRange"></div>
+      <div class="chart-container" id="cpChartWrap"><canvas id="cpChart"></canvas></div>
+      <div id="cpTableWrap">
+        <div class="table-scroll" style="margin-top:16px;">
+          <table>
+            <thead><tr>
+              <th>Series</th><th class="col-optional">What it is</th><th>Latest</th>
+              <th class="col-narrow">1d</th><th class="col-narrow">20d</th>
+              <th class="col-optional">Range</th><th>As of</th>
+            </tr></thead>
+            <tbody id="cpBody"></tbody>
+          </table>
+        </div>
+        <div class="scroll-hint">← swipe to see more →</div>
+        <p style="font-size:11.5px; color:var(--muted-dim); margin-top:14px; line-height:1.55;">
+          Changes are in basis points over the stated number of observations, not calendar days — these
+          series skip any day the Fed had too little trade data to publish a rate. "Range" is the high and
+          low over the window held in the feed.</p>
+      </div>
     </div>
   </div>
 
@@ -710,7 +748,11 @@ function computeModel(S, E){
   // refresh_model.py — keep the bands in step.
   const usdTransmission = usdTransmissionFrom(S);
   return {indicators, overallRisk, effectiveWeight, categoryScores, inflationaryPressure, fxStress, usdTransmission, regime, notes,
-    rawSeries, assetOutlook: buildAssetOutlook(regime)};
+    rawSeries, assetOutlook: buildAssetOutlook(regime),
+    // The commercial-paper panel is server-side only: it needs seven more
+    // series, and the proxy path is already fetching 27 through a public
+    // CORS relay. The section renders its own "needs the server feed" note.
+    commercialPaper: null};
 }
 
 /* ============ asset-class outlook (from workbook "Asset Outlook" sheet) ============ */
@@ -935,6 +977,7 @@ function renderModel(model){
 
   renderRawSeries(model.rawSeries);
   renderRealYields(model.realYields, model.realYieldsNote);
+  renderCommercialPaper(model.commercialPaper);
   const liveCount = all.filter(i=>!i.unavailable && i.score!==null).length;
   document.getElementById('indicatorSub').textContent = `${liveCount}/${all.length} INDICATORS LIVE · ${all.length-liveCount} UNAVAILABLE OR FAILED · 3 shown greyed-out (redundant, 0% weight)`;
 
@@ -1019,6 +1062,142 @@ function drawRealYieldScatter(pts){
   g+=`<text x="${W-R}" y="${H-6}" text-anchor="end" fill="#5b6576" style="font-family:var(--mono);font-size:10px">fit r = ${r.toFixed(2)} (n = ${pts.length})</text>`;
   g+=`<text x="${L}" y="${H-6}" fill="#5b6576" style="font-family:var(--mono);font-size:10px">red = weaker than its differential implies</text>`;
   svg.innerHTML=g;
+}
+
+/* ============ commercial paper ============ */
+/* Server-fed only. The whole panel is built in refresh_model.py
+   (build_commercial_paper) — including the forward-filled shared date axis,
+   so the chart cannot mis-align a sparse series against a denser one, which
+   is a real risk here: the Fed publishes no rate at all on days when trade
+   volume was too thin to compute one, and the A2/P2 series has the most
+   holes of the lot. */
+let CP_DATA = null, cpChart = null, CP_RANGE = 250;
+const CP_RANGES = [['3M', 60], ['6M', 125], ['1Y', 250], ['Max', 0]];
+const CP_SPREAD_COLOR = '#c084fc';
+
+function renderCommercialPaper(cp){
+  const status = document.getElementById('cpStatus');
+  const note = document.getElementById('cpNote');
+  const stats = document.getElementById('cpStatRow');
+  const legend = document.getElementById('cpLegend');
+  const rangeEl = document.getElementById('cpRange');
+  const chartWrap = document.getElementById('cpChartWrap');
+  const tblWrap = document.getElementById('cpTableWrap');
+  const body = document.getElementById('cpBody');
+
+  if(cpChart){ cpChart.destroy(); cpChart = null; }
+
+  if(!cp || !cp.dates || !cp.dates.length || !cp.lines || !cp.lines.length){
+    status.textContent = 'REQUIRES THE SERVER-REFRESHED FEED';
+    note.innerHTML = '<b>Not available on this path.</b> The commercial-paper panel needs seven more daily series, fetched server-side by <code style="font-family:var(--mono);color:var(--live)">refresh_model.py</code>. It appears once the scheduled job has run.';
+    stats.innerHTML = ''; legend.innerHTML = ''; body.innerHTML = '';
+    rangeEl.style.display = 'none'; chartWrap.style.display = 'none'; tblWrap.style.display = 'none';
+    return;
+  }
+
+  CP_DATA = cp;
+  rangeEl.style.display = ''; chartWrap.style.display = ''; tblWrap.style.display = '';
+  note.innerHTML = cp.note || '';
+
+  const n = CP_RANGE > 0 ? Math.min(CP_RANGE, cp.dates.length) : cp.dates.length;
+  const dates = cp.dates.slice(-n);
+  const cut = a => (a || []).slice(-n);
+  const sgn = (v, d=1) => (v===null||v===undefined) ? '\u2014' : (v>0?'+':'') + v.toFixed(d);
+
+  status.textContent = `${cp.lines.length} SERIES \u00b7 ${dates[0]} \u2192 ${dates[dates.length-1]} \u00b7 DAILY, POSTED ~1PM ET`;
+
+  // Headline spreads as stat cards, coloured by where each sits in its own
+  // 500-observation range — the same percentile idiom the indicator table
+  // uses, so "high" means high for this measure, not high on some absolute
+  // scale that a different rate regime would render meaningless.
+  stats.innerHTML = '';
+  [cp.spread, cp.bill_spread].forEach(sp=>{
+    if(!sp) return;
+    const hasPct = sp.percentile!==null && sp.percentile!==undefined;
+    const c = hasPct ? riskColor(sp.percentile) : 'var(--live)';
+    const div = document.createElement('div');
+    div.className = 'subscore';
+    div.innerHTML =
+      `<div class="k">${sp.label}</div>` +
+      `<div class="v" style="color:${c}">${sp.latest!==null&&sp.latest!==undefined?sp.latest.toFixed(1):'\u2014'}` +
+      `<span style="font-size:12px;color:var(--muted-dim)"> bp</span></div>` +
+      `<div class="s">${hasPct ? `${sp.percentile.toFixed(0)}th pct of its own range (${sp.min.toFixed(0)}\u2013${sp.max.toFixed(0)}bp)` : 'not enough history to rank'}` +
+      ` \u00b7 20 obs ${sgn(sp.chg_20)}bp</div>`;
+    const bar = document.createElement('div');
+    bar.style.cssText = `position:absolute;left:0;top:0;bottom:0;width:3px;background:${c}`;
+    div.appendChild(bar);
+    div.title = sp.description || '';
+    stats.appendChild(div);
+  });
+
+  legend.innerHTML = cp.lines.map(l=>`<span><i style="background:${l.color}"></i>${l.label}</span>`).join('')
+    + (cp.spread ? `<span><i style="background:${CP_SPREAD_COLOR}"></i>${cp.spread.label} \u00b7 right axis, bp</span>` : '');
+
+  rangeEl.innerHTML = CP_RANGES.map(([label, v])=>
+    `<button data-n="${v}" class="${v===CP_RANGE?'on':''}">${label}</button>`).join('');
+  rangeEl.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click', ()=>{ CP_RANGE = +b.dataset.n; renderCommercialPaper(CP_DATA); });
+  });
+
+  // A CP series going quiet for a few days is normal (thin trade), so the
+  // stale flag here is 7 days rather than the 45 used on the raw-data table,
+  // where monthly releases share the same column.
+  body.innerHTML = (cp.table||[]).map(r=>{
+    const age = r.latest_date ? Math.round((Date.now() - new Date(r.latest_date+'T00:00:00Z'))/86400000) : null;
+    const old = age!==null && age > 7;
+    const chgCol = v => (v===null||v===undefined) ? 'var(--muted)' : v>0 ? 'var(--highrisk)' : v<0 ? 'var(--normal)' : 'var(--muted)';
+    return `<tr>
+      <td class="ind-name">${r.id}</td>
+      <td class="col-optional" style="color:var(--muted)">${r.label}</td>
+      <td class="mono-val">${r.latest!==null&&r.latest!==undefined?r.latest.toFixed(2)+'%':'\u2014'}</td>
+      <td class="mono-val col-narrow" style="color:${chgCol(r.chg_1)}">${sgn(r.chg_1)}</td>
+      <td class="mono-val col-narrow" style="color:${chgCol(r.chg_20)}">${sgn(r.chg_20)}</td>
+      <td class="mono-val col-optional" style="color:var(--muted-dim)">${r.min!==null&&r.max!==null?`${r.min.toFixed(2)}\u2013${r.max.toFixed(2)}`:'\u2014'}</td>
+      <td class="mono-val${old?' stale':''}" style="font-size:11.5px">${r.latest_date||'\u2014'}${old?` <span style="font-size:10px">(${age}d)</span>`:''}</td>
+    </tr>`;
+  }).join('');
+
+  const datasets = cp.lines.map(l=>({
+    label: l.label, data: cut(l.values), borderColor: l.color,
+    borderWidth: 1.6, pointRadius: 0, tension: 0.2, yAxisID: 'yRate', fill: false, spanGaps: true,
+  }));
+  if(cp.spread){
+    datasets.push({
+      label: cp.spread.label, data: cut(cp.spread.values), borderColor: CP_SPREAD_COLOR,
+      borderWidth: 2, borderDash: [5,3], pointRadius: 0, tension: 0.2,
+      yAxisID: 'ySpread', fill: false, spanGaps: true,
+    });
+  }
+
+  const ctx = document.getElementById('cpChart').getContext('2d');
+  cpChart = new Chart(ctx, {
+    type: 'line',
+    data: {labels: dates, datasets},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: {mode:'index', intersect:false},
+      plugins: {
+        legend: {display:false},
+        tooltip: {
+          backgroundColor:'#151b26', borderColor:'#232b38', borderWidth:1,
+          titleColor:'#e7ecf3', bodyColor:'#8b96a8',
+          titleFont:{family:'JetBrains Mono', size:11}, bodyFont:{family:'JetBrains Mono', size:11}, padding:10,
+          callbacks:{
+            label: c => {
+              if(c.parsed.y===null||c.parsed.y===undefined) return `${c.dataset.label}: —`;
+              const unit = c.dataset.yAxisID==='ySpread' ? 'bp' : '%';
+              return `${c.dataset.label}: ${c.parsed.y.toFixed(2)}${unit}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {type:'category', grid:{color:'#1a212c'}, ticks:{color:'#5b6576', font:{family:'JetBrains Mono', size:9.5}, maxRotation:0, autoSkip:true, maxTicksLimit:8}},
+        yRate: {position:'left', grid:{color:'#1a212c'}, ticks:{color:'#8b96a8', font:{family:'JetBrains Mono', size:10}, callback:v=>v.toFixed(2)+'%'}, title:{display:true, text:'rate', color:'#8b96a8', font:{family:'JetBrains Mono', size:9.5, weight:'600'}}},
+        ySpread: {position:'right', grid:{display:false}, ticks:{color:CP_SPREAD_COLOR, font:{family:'JetBrains Mono', size:10}, callback:v=>v+'bp'}, title:{display:true, text:'spread (bp)', color:CP_SPREAD_COLOR, font:{family:'JetBrains Mono', size:9.5, weight:'600'}}},
+      },
+    },
+  });
 }
 
 function renderRawSeries(raw){
@@ -1385,6 +1564,7 @@ function adaptJsonModel(json){
     rawSeries: json.raw_series || null,
     realYields: json.real_yields || null,
     realYieldsNote: json.real_yields_note || null,
+    commercialPaper: json.commercial_paper || null,
   };
 }
 
@@ -1400,73 +1580,4 @@ async function tryLoadDurable(){
     // no real data inside). A timestamp alone isn't enough to trust it —
     // require at least the headline score to be a real number, otherwise
     // fall through to the proxy method instead of rendering all dashes.
-    if(json.overall_risk === null || json.overall_risk === undefined) return null;
-    return json;
-  }catch(e){ return null; }
-}
-
-/* ============ orchestration ============ */
-async function loadLiveViaProxy(){
-  const S={};
-  const results = await Promise.allSettled(SERIES.map(id=>fetchSeries(id).then(arr=>({id,arr}))));
-  let successCount=0;
-  results.forEach(r=>{
-    if(r.status==='fulfilled'){ S[r.value.id]=r.value.arr; successCount++; }
-  });
-  return {model: computeModel(S, {}), successCount, total: SERIES.length};
-}
-
-async function loadAndRender(){
-  const btn=document.getElementById('refreshBtn'); btn.disabled=true; btn.textContent='↻ Fetching…';
-  const dot=document.getElementById('feedDot'); dot.className='dot spin';
-  document.getElementById('feedStatusText').textContent='Checking for server-refreshed data…';
-
-  const durable = await tryLoadDurable();
-
-  if(durable){
-    const model = adaptJsonModel(durable);
-    renderModel(model);
-    const genAt = new Date(durable.generated_at);
-    const ageMin = (Date.now()-genAt.getTime())/60000;
-    document.getElementById('asofTime').textContent = genAt.toLocaleString();
-    document.getElementById('footerClock').textContent = 'Server refresh: '+genAt.toLocaleString();
-    btn.disabled=false; btn.textContent='↻ Refresh now';
-    if(ageMin<=20){
-      dot.className='dot on';
-      document.getElementById('feedStatusText').textContent = `Durable feed — refreshed ${ageMin.toFixed(0)}m ago`;
-    } else {
-      dot.className='dot off';
-      document.getElementById('feedStatusText').textContent = `Durable feed stale — last refresh ${ageMin.toFixed(0)}m ago (check the scheduled job)`;
-    }
-    return;
-  }
-
-  // fallback: no server-refreshed JSON found at DATA_URL — compute live in-browser via proxy
-  document.getElementById('feedStatusText').textContent='No server feed found — falling back to browser proxy fetch…';
-  const {model, successCount, total} = await loadLiveViaProxy();
-  renderModel(model);
-  btn.disabled=false; btn.textContent='↻ Refresh now';
-  const now=new Date();
-  document.getElementById('asofTime').textContent = now.toLocaleString();
-  document.getElementById('footerClock').textContent = 'Last proxy fetch: '+now.toLocaleString();
-  if(successCount===total){
-    dot.className='dot on';
-    document.getElementById('feedStatusText').textContent = `Fallback (proxy) — ${successCount}/${total} series OK · set up the server refresh for a durable feed`;
-  } else if(successCount>0){
-    dot.className='dot on';
-    document.getElementById('feedStatusText').textContent = `Fallback (proxy, partial) — ${successCount}/${total} series OK`;
-  } else {
-    dot.className='dot off';
-    document.getElementById('feedStatusText').textContent = `No data source reachable — neither server feed nor proxy responded`;
-  }
-}
-
-document.addEventListener('DOMContentLoaded', async ()=>{
-  renderTrendChart();
-  BACKTEST_DATA = await tryLoadBacktest(); // load once; backtest is a manual/weekly job, not 15-min
-  loadAndRender();
-  setInterval(loadAndRender, 15*60*1000);
-});
-</script>
-</body>
-</html>
+    if(json.overall_risk === null || json.overall_ri
