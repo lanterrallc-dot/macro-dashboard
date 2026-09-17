@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T04:08:18.322887+00:00",
+  "generated_at": "2026-09-17T04:29:12.493068+00:00",
   "indicators": [
     {
       "name": "HY Credit Spreads",
@@ -53,9 +53,9 @@
       "name": "Repo-Market Stress",
       "category": "Liquidity",
       "weight": 0.12,
-      "reading": 14.200000000000012,
+      "reading": null,
       "units": "0\u2013100",
-      "score": 14.200000000000012,
+      "score": null,
       "formula": "0.45 \u00d7 clamp(20 + (SOFR\u2212IORB)\u00d73) + 0.30 \u00d7 clamp(20 + (SOFR\u2212EFFR)\u00d74) + 0.25 \u00d7 clamp((SOFR 75th \u2212 25th)\u00d74), each clamped 0\u2013100",
       "inputs": [
         {
@@ -67,8 +67,8 @@
         {
           "label": "Interest on Reserve Balances",
           "series": "IORB",
-          "value": 3.9,
-          "date": "2026-09-17"
+          "value": null,
+          "date": null
         },
         {
           "label": "Effective Fed Funds Rate",
@@ -90,7 +90,7 @@
         },
         {
           "label": "SOFR \u2212 IORB",
-          "value": -25.99999999999998,
+          "value": null,
           "units": "bps",
           "derived": true
         },
@@ -107,17 +107,8 @@
           "derived": true
         }
       ],
-      "steps": [
-        "SOFR \u2212 IORB = 3.6400 \u2212 3.9000 = -26.00bp",
-        "SOFR \u2212 EFFR = 3.6400 \u2212 3.6300 = 1.00bp",
-        "SOFR 75th \u2212 25th = 3.6900 \u2212 3.6200 = 7.00bp",
-        "leg 1: clamp(20 + -26.00 \u00d7 3) = 0.00",
-        "leg 2: clamp(20 + 1.00 \u00d7 4) = 24.00",
-        "leg 3: clamp(7.00 \u00d7 4) = 28.00",
-        "0.45 \u00d7 0.00 + 0.30 \u00d7 24.00 + 0.25 \u00d7 28.00 = 14.20",
-        "contribution to overall risk: 14.20 \u00d7 12% = 1.70"
-      ],
-      "weighted": 1.7040000000000013
+      "steps": [],
+      "weighted": null
     },
     {
       "name": "Fed Net Liquidity",
@@ -520,9 +511,9 @@
       "name": "SOFR\u2013IORB Spread",
       "category": "Liquidity",
       "weight": 0,
-      "reading": -25.99999999999998,
+      "reading": null,
       "units": "bps",
-      "score": 0,
+      "score": null,
       "redundant": "folded into Repo-Market Stress (45% of that composite)",
       "formula": "clamp(50 + (SOFR \u2212 IORB in bps) \u00d7 4, 0, 100)",
       "inputs": [
@@ -535,21 +526,18 @@
         {
           "label": "Interest on Reserve Balances",
           "series": "IORB",
-          "value": 3.9,
-          "date": "2026-09-17"
+          "value": null,
+          "date": null
         },
         {
           "label": "SOFR \u2212 IORB",
-          "value": -25.99999999999998,
+          "value": null,
           "units": "bps",
           "derived": true
         }
       ],
-      "steps": [
-        "SOFR \u2212 IORB = 3.6400 \u2212 3.9000 = -26.00bp",
-        "clamp(50 + -26.00 \u00d7 4) = 0.00"
-      ],
-      "weighted": 0
+      "steps": [],
+      "weighted": null
     },
     {
       "name": "Bank Reserves",
@@ -577,15 +565,15 @@
       "weighted": 0.0
     }
   ],
-  "overall_risk": 35.43705671791647,
-  "effective_weight": 1.0000000000000002,
+  "overall_risk": 33.73305671791647,
+  "effective_weight": 0.8800000000000001,
   "category_scores": {
-    "Liquidity": 19.46655555555556,
+    "Liquidity": 22.099833333333333,
     "Credit": 21.55,
     "Rates": 59.98125000000003,
     "Market / Macro": 51.864631135415934
   },
-  "inflationary_pressure": 50.425862500000015,
+  "inflationary_pressure": null,
   "fx_stress": 6.2487778017028095,
   "usd_transmission": {
     "r_60d": 0.226,
@@ -600,197 +588,189 @@
       "DTWEXBGS"
     ]
   },
-  "regime": "Liquidity Expansion",
+  "regime": "Insufficient data",
   "asset_outlook": {
-    "regime": "Liquidity Expansion",
+    "regime": "Insufficient data",
     "assets": [
       {
         "name": "S&P 500",
         "ticker": "SPY",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "JPY carry unwind",
         "interpretation": "Strong yen can pressure leveraged/global risk assets",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Nasdaq / Growth",
         "ticker": "QQQ",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "USD funding",
         "interpretation": "Broad USD strength can tighten global liquidity",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Small Caps",
         "ticker": "IWM",
-        "likely_direction": "UP STRONG",
+        "likely_direction": null,
         "fx_transmission": "USD funding",
         "interpretation": "Broad USD strength often pressures high-duration growth",
-        "direction_rank": 2
+        "direction_rank": null
       },
       {
         "name": "Value Stocks",
         "ticker": "VTV",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "USD / growth",
         "interpretation": "Strong USD can pressure smaller domestic/leveraged firms less directly than EM",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "High Dividend Stocks",
         "ticker": "VYM",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "USD",
         "interpretation": "Strong USD can weigh on multinational earnings",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "High-Yield Bonds",
         "ticker": "HYG",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "USD funding",
         "interpretation": "Dollar stress can widen HY spreads",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Investment-Grade Bonds",
         "ticker": "LQD",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "USD / rates",
         "interpretation": "Depends on whether FX stress is inflationary or deflationary",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Short Treasuries / T-Bills",
         "ticker": "BIL / SGOV",
-        "likely_direction": "MIXED / UP",
+        "likely_direction": null,
         "fx_transmission": "Safe collateral",
         "interpretation": "Often resilient in FX/liquidity stress",
-        "direction_rank": 0.5
+        "direction_rank": null
       },
       {
         "name": "Long Treasuries",
         "ticker": "TLT",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "Safe haven",
         "interpretation": "Can benefit in deflationary stress; hurt in inflationary tightening",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "U.S. Dollar",
         "ticker": "DXY / UUP",
-        "likely_direction": "DOWN / MIXED",
+        "likely_direction": null,
         "fx_transmission": "Direct",
         "interpretation": "This is itself the USD signal",
-        "direction_rank": -0.5
+        "direction_rank": null
       },
       {
         "name": "Gold",
         "ticker": "GLD",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "Safe haven",
         "interpretation": "Gold often benefits after acute liquidation passes",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Silver",
         "ticker": "SLV",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "Growth / USD",
         "interpretation": "Sensitive to USD and industrial-growth expectations",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Broad Commodities",
         "ticker": "DBC",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "USD inverse",
         "interpretation": "Broad commodities often face headwind from stronger USD",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Oil",
         "ticker": "USO / CL",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "USD / growth",
         "interpretation": "Strong USD and growth fear often weigh on oil",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "REITs",
         "ticker": "VNQ",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "Rates / USD",
         "interpretation": "Sensitive to yields and global funding",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Utilities",
         "ticker": "XLU",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "Defensive",
         "interpretation": "Often relative outperformer in risk-off regimes",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Consumer Staples",
         "ticker": "XLP",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "Defensive",
         "interpretation": "Often relative outperformer",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Financials",
         "ticker": "XLF",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "Funding",
         "interpretation": "Credit/funding stress is negative",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Bitcoin",
         "ticker": "BTC",
-        "likely_direction": "UP STRONG",
+        "likely_direction": null,
         "fx_transmission": "Carry / liquidity",
         "interpretation": "Very sensitive to carry unwind and USD liquidity",
-        "direction_rank": 2
+        "direction_rank": null
       },
       {
         "name": "Crypto ex-BTC",
         "ticker": "ETH / Altcoins",
-        "likely_direction": "UP STRONG",
+        "likely_direction": null,
         "fx_transmission": "Carry / liquidity",
         "interpretation": "Usually even more sensitive than BTC",
-        "direction_rank": 2
+        "direction_rank": null
       },
       {
         "name": "Emerging-Market Stocks",
         "ticker": "EEM",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "USD / China",
         "interpretation": "Strong USD/CNY weakness often negative",
-        "direction_rank": 1
+        "direction_rank": null
       },
       {
         "name": "Emerging-Market Bonds",
         "ticker": "EMB",
-        "likely_direction": "UP",
+        "likely_direction": null,
         "fx_transmission": "USD funding",
         "interpretation": "Dollar tightening can pressure EM debt",
-        "direction_rank": 1
+        "direction_rank": null
       }
     ],
-    "most_favored": [
-      "Small Caps",
-      "Bitcoin",
-      "Crypto ex-BTC",
-      "S&P 500",
-      "Nasdaq / Growth"
-    ],
-    "least_favored": [
-      "U.S. Dollar"
-    ],
+    "most_favored": [],
+    "least_favored": [],
     "note": "Regime-conditioned historical tendencies from the source workbook, not guaranteed forecasts. \"Relative UP\" means the asset may still decline but has often held up better than broad equities."
   },
   "raw_series": {
@@ -893,18 +873,9 @@
       "first_date": "2018-04-03"
     },
     "IORB": {
-      "latest": 3.9,
-      "date": "2026-09-17",
-      "obs": 1877,
-      "prev_1": 3.65,
-      "prev_1_date": "2026-09-16",
-      "prev_5": 3.65,
-      "prev_5_date": "2026-09-12",
-      "prev_20": 3.65,
-      "prev_20_date": "2026-08-28",
-      "min": 0.15,
-      "max": 5.4,
-      "first_date": "2021-07-29"
+      "latest": null,
+      "date": null,
+      "obs": 0
     },
     "VIXCLS": {
       "latest": 17.2,
@@ -1177,7 +1148,7 @@
     "S&P 500": [
       {
         "date": "2026-02-09",
-        "value": 690.2816772460938
+        "value": 690.2816162109375
       },
       {
         "date": "2026-02-10",
@@ -1205,7 +1176,7 @@
       },
       {
         "date": "2026-02-19",
-        "value": 680.8616333007812
+        "value": 680.8616943359375
       },
       {
         "date": "2026-02-20",
@@ -1233,7 +1204,7 @@
       },
       {
         "date": "2026-03-02",
-        "value": 682.751708984375
+        "value": 682.7516479492188
       },
       {
         "date": "2026-03-03",
@@ -1241,19 +1212,19 @@
       },
       {
         "date": "2026-03-04",
-        "value": 681.5082397460938
+        "value": 681.50830078125
       },
       {
         "date": "2026-03-05",
-        "value": 677.70849609375
+        "value": 677.7084350585938
       },
       {
         "date": "2026-03-06",
-        "value": 668.82568359375
+        "value": 668.8256225585938
       },
       {
         "date": "2026-03-09",
-        "value": 674.6845703125
+        "value": 674.6845092773438
       },
       {
         "date": "2026-03-10",
@@ -1285,7 +1256,7 @@
       },
       {
         "date": "2026-03-19",
-        "value": 656.3121948242188
+        "value": 656.3121337890625
       },
       {
         "date": "2026-03-20",
@@ -2397,11 +2368,11 @@
     "Small Caps": [
       {
         "date": "2026-02-09",
-        "value": 265.08172607421875
+        "value": 265.0817565917969
       },
       {
         "date": "2026-02-10",
-        "value": 264.3665771484375
+        "value": 264.3666076660156
       },
       {
         "date": "2026-02-11",
@@ -2409,19 +2380,19 @@
       },
       {
         "date": "2026-02-12",
-        "value": 257.7912292480469
+        "value": 257.79119873046875
       },
       {
         "date": "2026-02-13",
-        "value": 261.18817138671875
+        "value": 261.1881408691406
       },
       {
         "date": "2026-02-17",
-        "value": 261.26763916015625
+        "value": 261.2676086425781
       },
       {
         "date": "2026-02-18",
-        "value": 262.2112121582031
+        "value": 262.211181640625
       },
       {
         "date": "2026-02-19",
@@ -2437,7 +2408,7 @@
       },
       {
         "date": "2026-02-24",
-        "value": 261.5556335449219
+        "value": 261.5556640625
       },
       {
         "date": "2026-02-25",
@@ -2449,7 +2420,7 @@
       },
       {
         "date": "2026-02-27",
-        "value": 259.64862060546875
+        "value": 259.6485900878906
       },
       {
         "date": "2026-03-02",
@@ -2465,11 +2436,11 @@
       },
       {
         "date": "2026-03-05",
-        "value": 255.02993774414062
+        "value": 255.02992248535156
       },
       {
         "date": "2026-03-06",
-        "value": 249.19947814941406
+        "value": 249.19949340820312
       },
       {
         "date": "2026-03-09",
@@ -2477,7 +2448,7 @@
       },
       {
         "date": "2026-03-10",
-        "value": 251.65284729003906
+        "value": 251.65283203125
       },
       {
         "date": "2026-03-11",
@@ -2485,7 +2456,7 @@
       },
       {
         "date": "2026-03-12",
-        "value": 245.74293518066406
+        "value": 245.74295043945312
       },
       {
         "date": "2026-03-13",
@@ -2493,7 +2464,7 @@
       },
       {
         "date": "2026-03-16",
-        "value": 247.2427520751953
+        "value": 247.24276733398438
       },
       {
         "date": "2026-03-17",
@@ -2505,7 +2476,7 @@
       },
       {
         "date": "2026-03-19",
-        "value": 246.39898681640625
+        "value": 246.3989715576172
       },
       {
         "date": "2026-03-20",
@@ -2513,7 +2484,7 @@
       },
       {
         "date": "2026-03-23",
-        "value": 246.21987915039062
+        "value": 246.21986389160156
       },
       {
         "date": "2026-03-24",
@@ -2525,11 +2496,11 @@
       },
       {
         "date": "2026-03-26",
-        "value": 246.2099151611328
+        "value": 246.20993041992188
       },
       {
         "date": "2026-03-27",
-        "value": 241.89149475097656
+        "value": 241.89151000976562
       },
       {
         "date": "2026-03-30",
@@ -2541,7 +2512,7 @@
       },
       {
         "date": "2026-04-01",
-        "value": 248.31936645507812
+        "value": 248.3193817138672
       },
       {
         "date": "2026-04-02",
@@ -2549,11 +2520,11 @@
       },
       {
         "date": "2026-04-06",
-        "value": 251.10545349121094
+        "value": 251.10546875
       },
       {
         "date": "2026-04-07",
-        "value": 251.65274047851562
+        "value": 251.65272521972656
       },
       {
         "date": "2026-04-08",
@@ -2569,15 +2540,15 @@
       },
       {
         "date": "2026-04-13",
-        "value": 263.7522888183594
+        "value": 263.75225830078125
       },
       {
         "date": "2026-04-14",
-        "value": 267.3841247558594
+        "value": 267.3841552734375
       },
       {
         "date": "2026-04-15",
-        "value": 268.0508117675781
+        "value": 268.05084228515625
       },
       {
         "date": "2026-04-16",
@@ -2585,7 +2556,7 @@
       },
       {
         "date": "2026-04-17",
-        "value": 274.4090576171875
+        "value": 274.4090270996094
       },
       {
         "date": "2026-04-20",
@@ -2593,7 +2564,7 @@
       },
       {
         "date": "2026-04-21",
-        "value": 273.1453552246094
+        "value": 273.1453857421875
       },
       {
         "date": "2026-04-22",
@@ -2629,7 +2600,7 @@
       },
       {
         "date": "2026-05-04",
-        "value": 276.49859619140625
+        "value": 276.4986267089844
       },
       {
         "date": "2026-05-05",
@@ -2641,11 +2612,11 @@
       },
       {
         "date": "2026-05-07",
-        "value": 280.8568115234375
+        "value": 280.8568420410156
       },
       {
         "date": "2026-05-08",
-        "value": 282.75732421875
+        "value": 282.7573547363281
       },
       {
         "date": "2026-05-11",
@@ -2657,7 +2628,7 @@
       },
       {
         "date": "2026-05-13",
-        "value": 281.2647705078125
+        "value": 281.2648010253906
       },
       {
         "date": "2026-05-14",
@@ -2665,7 +2636,7 @@
       },
       {
         "date": "2026-05-15",
-        "value": 276.2200012207031
+        "value": 276.219970703125
       },
       {
         "date": "2026-05-18",
@@ -2685,7 +2656,7 @@
       },
       {
         "date": "2026-05-22",
-        "value": 283.70257568359375
+        "value": 283.7026062011719
       },
       {
         "date": "2026-05-26",
@@ -2693,7 +2664,7 @@
       },
       {
         "date": "2026-05-27",
-        "value": 288.9264831542969
+        "value": 288.926513671875
       },
       {
         "date": "2026-05-28",
@@ -2713,7 +2684,7 @@
       },
       {
         "date": "2026-06-03",
-        "value": 286.2399597167969
+        "value": 286.23992919921875
       },
       {
         "date": "2026-06-04",
@@ -2725,7 +2696,7 @@
       },
       {
         "date": "2026-06-08",
-        "value": 282.6976318359375
+        "value": 282.6976013183594
       },
       {
         "date": "2026-06-09",
@@ -2733,7 +2704,7 @@
       },
       {
         "date": "2026-06-10",
-        "value": 280.6478271484375
+        "value": 280.6478576660156
       },
       {
         "date": "2026-06-11",
@@ -3011,7 +2982,7 @@
       },
       {
         "date": "2026-02-10",
-        "value": 203.69393920898438
+        "value": 203.69395446777344
       },
       {
         "date": "2026-02-11",
@@ -3031,11 +3002,11 @@
       },
       {
         "date": "2026-02-18",
-        "value": 204.3965606689453
+        "value": 204.39657592773438
       },
       {
         "date": "2026-02-19",
-        "value": 203.9809112548828
+        "value": 203.98092651367188
       },
       {
         "date": "2026-02-20",
@@ -3059,23 +3030,23 @@
       },
       {
         "date": "2026-02-27",
-        "value": 205.10910034179688
+        "value": 205.1090850830078
       },
       {
         "date": "2026-03-02",
-        "value": 204.6637725830078
+        "value": 204.66375732421875
       },
       {
         "date": "2026-03-03",
-        "value": 202.15013122558594
+        "value": 202.150146484375
       },
       {
         "date": "2026-03-04",
-        "value": 202.8626708984375
+        "value": 202.86265563964844
       },
       {
         "date": "2026-03-05",
-        "value": 200.23025512695312
+        "value": 200.2302703857422
       },
       {
         "date": "2026-03-06",
@@ -3087,7 +3058,7 @@
       },
       {
         "date": "2026-03-10",
-        "value": 197.8452606201172
+        "value": 197.84527587890625
       },
       {
         "date": "2026-03-11",
@@ -3095,7 +3066,7 @@
       },
       {
         "date": "2026-03-12",
-        "value": 194.95556640625
+        "value": 194.95558166503906
       },
       {
         "date": "2026-03-13",
@@ -3123,11 +3094,11 @@
       },
       {
         "date": "2026-03-23",
-        "value": 193.85708618164062
+        "value": 193.8571014404297
       },
       {
         "date": "2026-03-24",
-        "value": 194.91598510742188
+        "value": 194.91600036621094
       },
       {
         "date": "2026-03-25",
@@ -4227,7 +4198,7 @@
     "High-Yield Bonds": [
       {
         "date": "2026-02-09",
-        "value": 78.13705444335938
+        "value": 78.13704681396484
       },
       {
         "date": "2026-02-10",
@@ -4235,19 +4206,19 @@
       },
       {
         "date": "2026-02-11",
-        "value": 78.05013275146484
+        "value": 78.0501480102539
       },
       {
         "date": "2026-02-12",
-        "value": 78.01152801513672
+        "value": 78.01150512695312
       },
       {
         "date": "2026-02-13",
-        "value": 78.06945037841797
+        "value": 78.06944274902344
       },
       {
         "date": "2026-02-17",
-        "value": 78.03082275390625
+        "value": 78.03083038330078
       },
       {
         "date": "2026-02-18",
@@ -4255,43 +4226,43 @@
       },
       {
         "date": "2026-02-19",
-        "value": 78.1563491821289
+        "value": 78.15635681152344
       },
       {
         "date": "2026-02-20",
-        "value": 78.21428680419922
+        "value": 78.21429443359375
       },
       {
         "date": "2026-02-23",
-        "value": 78.0887680053711
+        "value": 78.08876037597656
       },
       {
         "date": "2026-02-24",
-        "value": 78.03082275390625
+        "value": 78.03083038330078
       },
       {
         "date": "2026-02-25",
-        "value": 78.13705444335938
+        "value": 78.13704681396484
       },
       {
         "date": "2026-02-26",
-        "value": 78.06945037841797
+        "value": 78.06944274902344
       },
       {
         "date": "2026-02-27",
-        "value": 77.94392395019531
+        "value": 77.94393157958984
       },
       {
         "date": "2026-03-02",
-        "value": 77.8992919921875
+        "value": 77.89928436279297
       },
       {
         "date": "2026-03-03",
-        "value": 77.7440414428711
+        "value": 77.74403381347656
       },
       {
         "date": "2026-03-04",
-        "value": 78.0157241821289
+        "value": 78.01573181152344
       },
       {
         "date": "2026-03-05",
@@ -4307,11 +4278,11 @@
       },
       {
         "date": "2026-03-10",
-        "value": 77.6664047241211
+        "value": 77.66639709472656
       },
       {
         "date": "2026-03-11",
-        "value": 77.49175262451172
+        "value": 77.49174499511719
       },
       {
         "date": "2026-03-12",
@@ -4335,7 +4306,7 @@
       },
       {
         "date": "2026-03-19",
-        "value": 77.29767608642578
+        "value": 77.29768371582031
       },
       {
         "date": "2026-03-20",
@@ -4343,7 +4314,7 @@
       },
       {
         "date": "2026-03-23",
-        "value": 77.08419799804688
+        "value": 77.08419036865234
       },
       {
         "date": "2026-03-24",
@@ -4351,7 +4322,7 @@
       },
       {
         "date": "2026-03-25",
-        "value": 77.06478118896484
+        "value": 77.06478881835938
       },
       {
         "date": "2026-03-26",
@@ -4363,7 +4334,7 @@
       },
       {
         "date": "2026-03-30",
-        "value": 76.47288513183594
+        "value": 76.47286987304688
       },
       {
         "date": "2026-03-31",
@@ -4371,7 +4342,7 @@
       },
       {
         "date": "2026-04-01",
-        "value": 77.38980865478516
+        "value": 77.38980102539062
       },
       {
         "date": "2026-04-02",
@@ -4379,7 +4350,7 @@
       },
       {
         "date": "2026-04-06",
-        "value": 77.71156311035156
+        "value": 77.7115707397461
       },
       {
         "date": "2026-04-07",
@@ -4387,15 +4358,15 @@
       },
       {
         "date": "2026-04-08",
-        "value": 78.18933868408203
+        "value": 78.18934631347656
       },
       {
         "date": "2026-04-09",
-        "value": 78.277099609375
+        "value": 78.27709197998047
       },
       {
         "date": "2026-04-10",
-        "value": 77.96507263183594
+        "value": 77.96508026123047
       },
       {
         "date": "2026-04-13",
@@ -4407,11 +4378,11 @@
       },
       {
         "date": "2026-04-15",
-        "value": 78.45260620117188
+        "value": 78.45259857177734
       },
       {
         "date": "2026-04-16",
-        "value": 78.3453598022461
+        "value": 78.3453369140625
       },
       {
         "date": "2026-04-17",
@@ -4419,7 +4390,7 @@
       },
       {
         "date": "2026-04-20",
-        "value": 78.56961059570312
+        "value": 78.56959533691406
       },
       {
         "date": "2026-04-21",
@@ -4435,15 +4406,15 @@
       },
       {
         "date": "2026-04-24",
-        "value": 78.47211456298828
+        "value": 78.47210693359375
       },
       {
         "date": "2026-04-27",
-        "value": 78.5013656616211
+        "value": 78.50135803222656
       },
       {
         "date": "2026-04-28",
-        "value": 78.39408874511719
+        "value": 78.39409637451172
       },
       {
         "date": "2026-04-29",
@@ -4463,15 +4434,15 @@
       },
       {
         "date": "2026-05-05",
-        "value": 78.33441162109375
+        "value": 78.33440399169922
       },
       {
         "date": "2026-05-06",
-        "value": 78.56964874267578
+        "value": 78.56964111328125
       },
       {
         "date": "2026-05-07",
-        "value": 78.2756118774414
+        "value": 78.27560424804688
       },
       {
         "date": "2026-05-08",
@@ -4487,7 +4458,7 @@
       },
       {
         "date": "2026-05-13",
-        "value": 78.3246078491211
+        "value": 78.32461547851562
       },
       {
         "date": "2026-05-14",
@@ -4499,7 +4470,7 @@
       },
       {
         "date": "2026-05-18",
-        "value": 77.96194458007812
+        "value": 77.96195220947266
       },
       {
         "date": "2026-05-19",
@@ -4507,15 +4478,15 @@
       },
       {
         "date": "2026-05-20",
-        "value": 78.2756118774414
+        "value": 78.27560424804688
       },
       {
         "date": "2026-05-21",
-        "value": 78.31481170654297
+        "value": 78.31480407714844
       },
       {
         "date": "2026-05-22",
-        "value": 78.3246078491211
+        "value": 78.32461547851562
       },
       {
         "date": "2026-05-26",
@@ -4523,7 +4494,7 @@
       },
       {
         "date": "2026-05-27",
-        "value": 78.54024505615234
+        "value": 78.54022979736328
       },
       {
         "date": "2026-05-28",
@@ -4539,7 +4510,7 @@
       },
       {
         "date": "2026-06-02",
-        "value": 78.71569061279297
+        "value": 78.71568298339844
       },
       {
         "date": "2026-06-03",
@@ -4547,7 +4518,7 @@
       },
       {
         "date": "2026-06-04",
-        "value": 78.646728515625
+        "value": 78.64672088623047
       },
       {
         "date": "2026-06-05",
@@ -4555,7 +4526,7 @@
       },
       {
         "date": "2026-06-08",
-        "value": 78.36101531982422
+        "value": 78.36102294921875
       },
       {
         "date": "2026-06-09",
@@ -4563,7 +4534,7 @@
       },
       {
         "date": "2026-06-10",
-        "value": 78.29206848144531
+        "value": 78.29206085205078
       },
       {
         "date": "2026-06-11",
@@ -4607,7 +4578,7 @@
       },
       {
         "date": "2026-06-26",
-        "value": 78.646728515625
+        "value": 78.64672088623047
       },
       {
         "date": "2026-06-29",
@@ -4615,7 +4586,7 @@
       },
       {
         "date": "2026-06-30",
-        "value": 78.7846450805664
+        "value": 78.78465270996094
       },
       {
         "date": "2026-07-01",
@@ -4837,31 +4808,31 @@
     "Investment-Grade Bonds": [
       {
         "date": "2026-02-09",
-        "value": 107.5880126953125
+        "value": 107.58802795410156
       },
       {
         "date": "2026-02-10",
-        "value": 107.84102630615234
+        "value": 107.84103393554688
       },
       {
         "date": "2026-02-11",
-        "value": 107.72425079345703
+        "value": 107.7242431640625
       },
       {
         "date": "2026-02-12",
-        "value": 108.23027801513672
+        "value": 108.23028564453125
       },
       {
         "date": "2026-02-13",
-        "value": 108.59031677246094
+        "value": 108.59033203125
       },
       {
         "date": "2026-02-17",
-        "value": 108.69737243652344
+        "value": 108.6973648071289
       },
       {
         "date": "2026-02-18",
-        "value": 108.59031677246094
+        "value": 108.59033203125
       },
       {
         "date": "2026-02-19",
@@ -4869,7 +4840,7 @@
       },
       {
         "date": "2026-02-20",
-        "value": 108.59031677246094
+        "value": 108.59033203125
       },
       {
         "date": "2026-02-23",
@@ -4881,7 +4852,7 @@
       },
       {
         "date": "2026-02-25",
-        "value": 108.64871978759766
+        "value": 108.64871215820312
       },
       {
         "date": "2026-02-26",
@@ -4893,7 +4864,7 @@
       },
       {
         "date": "2026-03-02",
-        "value": 108.30977630615234
+        "value": 108.30976867675781
       },
       {
         "date": "2026-03-03",
@@ -4901,7 +4872,7 @@
       },
       {
         "date": "2026-03-04",
-        "value": 108.35860443115234
+        "value": 108.35861206054688
       },
       {
         "date": "2026-03-05",
@@ -4913,7 +4884,7 @@
       },
       {
         "date": "2026-03-09",
-        "value": 108.21214294433594
+        "value": 108.2121353149414
       },
       {
         "date": "2026-03-10",
@@ -4933,7 +4904,7 @@
       },
       {
         "date": "2026-03-16",
-        "value": 106.13226318359375
+        "value": 106.13225555419922
       },
       {
         "date": "2026-03-17",
@@ -4949,11 +4920,11 @@
       },
       {
         "date": "2026-03-20",
-        "value": 105.3120346069336
+        "value": 105.31202697753906
       },
       {
         "date": "2026-03-23",
-        "value": 106.00531768798828
+        "value": 106.00531005859375
       },
       {
         "date": "2026-03-24",
@@ -4961,7 +4932,7 @@
       },
       {
         "date": "2026-03-25",
-        "value": 106.17132568359375
+        "value": 106.17131805419922
       },
       {
         "date": "2026-03-26",
@@ -4977,23 +4948,23 @@
       },
       {
         "date": "2026-03-31",
-        "value": 106.4251937866211
+        "value": 106.42520141601562
       },
       {
         "date": "2026-04-01",
-        "value": 106.53893280029297
+        "value": 106.5389404296875
       },
       {
         "date": "2026-04-02",
-        "value": 106.98995971679688
+        "value": 106.98995208740234
       },
       {
         "date": "2026-04-06",
-        "value": 106.8232650756836
+        "value": 106.82327270507812
       },
       {
         "date": "2026-04-07",
-        "value": 106.94091796875
+        "value": 106.94093322753906
       },
       {
         "date": "2026-04-08",
@@ -5005,15 +4976,15 @@
       },
       {
         "date": "2026-04-10",
-        "value": 107.0683822631836
+        "value": 107.06838989257812
       },
       {
         "date": "2026-04-13",
-        "value": 107.48019409179688
+        "value": 107.4802017211914
       },
       {
         "date": "2026-04-14",
-        "value": 107.83316802978516
+        "value": 107.83317565917969
       },
       {
         "date": "2026-04-15",
@@ -5033,7 +5004,7 @@
       },
       {
         "date": "2026-04-21",
-        "value": 107.47038269042969
+        "value": 107.47039031982422
       },
       {
         "date": "2026-04-22",
@@ -5041,11 +5012,11 @@
       },
       {
         "date": "2026-04-23",
-        "value": 107.38214111328125
+        "value": 107.38213348388672
       },
       {
         "date": "2026-04-24",
-        "value": 107.46057891845703
+        "value": 107.46058654785156
       },
       {
         "date": "2026-04-27",
@@ -5057,11 +5028,11 @@
       },
       {
         "date": "2026-04-29",
-        "value": 106.60757446289062
+        "value": 106.6075668334961
       },
       {
         "date": "2026-04-30",
-        "value": 106.72522735595703
+        "value": 106.7252197265625
       },
       {
         "date": "2026-05-01",
@@ -5069,11 +5040,11 @@
       },
       {
         "date": "2026-05-04",
-        "value": 106.55297088623047
+        "value": 106.55296325683594
       },
       {
         "date": "2026-05-05",
-        "value": 106.94670867919922
+        "value": 106.94669342041016
       },
       {
         "date": "2026-05-06",
@@ -5081,7 +5052,7 @@
       },
       {
         "date": "2026-05-07",
-        "value": 107.03529357910156
+        "value": 107.03528594970703
       },
       {
         "date": "2026-05-08",
@@ -5089,23 +5060,23 @@
       },
       {
         "date": "2026-05-11",
-        "value": 107.2223129272461
+        "value": 107.22230529785156
       },
       {
         "date": "2026-05-12",
-        "value": 106.85811614990234
+        "value": 106.85810852050781
       },
       {
         "date": "2026-05-13",
-        "value": 106.91716766357422
+        "value": 106.91717529296875
       },
       {
         "date": "2026-05-14",
-        "value": 106.84825897216797
+        "value": 106.8482666015625
       },
       {
         "date": "2026-05-15",
-        "value": 106.16908264160156
+        "value": 106.16907501220703
       },
       {
         "date": "2026-05-18",
@@ -5133,11 +5104,11 @@
       },
       {
         "date": "2026-05-27",
-        "value": 107.2223129272461
+        "value": 107.22230529785156
       },
       {
         "date": "2026-05-28",
-        "value": 107.54713439941406
+        "value": 107.54712677001953
       },
       {
         "date": "2026-05-29",
@@ -5149,7 +5120,7 @@
       },
       {
         "date": "2026-06-02",
-        "value": 107.61888122558594
+        "value": 107.6188735961914
       },
       {
         "date": "2026-06-03",
@@ -5161,19 +5132,19 @@
       },
       {
         "date": "2026-06-05",
-        "value": 106.87784576416016
+        "value": 106.87783813476562
       },
       {
         "date": "2026-06-08",
-        "value": 106.76914978027344
+        "value": 106.76915740966797
       },
       {
         "date": "2026-06-09",
-        "value": 107.11497497558594
+        "value": 107.11498260498047
       },
       {
         "date": "2026-06-10",
-        "value": 106.86797332763672
+        "value": 106.86796569824219
       },
       {
         "date": "2026-06-11",
@@ -5193,7 +5164,7 @@
       },
       {
         "date": "2026-06-17",
-        "value": 107.47067260742188
+        "value": 107.4706802368164
       },
       {
         "date": "2026-06-18",
@@ -5209,7 +5180,7 @@
       },
       {
         "date": "2026-06-24",
-        "value": 108.10302734375
+        "value": 108.10303497314453
       },
       {
         "date": "2026-06-25",
@@ -5221,7 +5192,7 @@
       },
       {
         "date": "2026-06-29",
-        "value": 108.38957214355469
+        "value": 108.38956451416016
       },
       {
         "date": "2026-06-30",
@@ -5249,7 +5220,7 @@
       },
       {
         "date": "2026-07-09",
-        "value": 106.79737854003906
+        "value": 106.79737091064453
       },
       {
         "date": "2026-07-10",
@@ -5257,7 +5228,7 @@
       },
       {
         "date": "2026-07-13",
-        "value": 106.0537338256836
+        "value": 106.05372619628906
       },
       {
         "date": "2026-07-14",
@@ -5269,7 +5240,7 @@
       },
       {
         "date": "2026-07-16",
-        "value": 106.58914947509766
+        "value": 106.58915710449219
       },
       {
         "date": "2026-07-17",
@@ -5297,7 +5268,7 @@
       },
       {
         "date": "2026-07-27",
-        "value": 105.60755157470703
+        "value": 105.6075439453125
       },
       {
         "date": "2026-07-28",
@@ -5309,7 +5280,7 @@
       },
       {
         "date": "2026-07-30",
-        "value": 105.50839233398438
+        "value": 105.5083999633789
       },
       {
         "date": "2026-07-31",
@@ -5447,7 +5418,7 @@
     "Short Treasuries / T-Bills": [
       {
         "date": "2026-02-09",
-        "value": 89.59345245361328
+        "value": 89.59344482421875
       },
       {
         "date": "2026-02-10",
@@ -5471,11 +5442,11 @@
       },
       {
         "date": "2026-02-18",
-        "value": 89.6816177368164
+        "value": 89.68162536621094
       },
       {
         "date": "2026-02-19",
-        "value": 89.6816177368164
+        "value": 89.68162536621094
       },
       {
         "date": "2026-02-20",
@@ -5487,7 +5458,7 @@
       },
       {
         "date": "2026-02-24",
-        "value": 89.73062133789062
+        "value": 89.73060607910156
       },
       {
         "date": "2026-02-25",
@@ -5495,19 +5466,19 @@
       },
       {
         "date": "2026-02-26",
-        "value": 89.75019836425781
+        "value": 89.75020599365234
       },
       {
         "date": "2026-02-27",
-        "value": 89.76980590820312
+        "value": 89.76981353759766
       },
       {
         "date": "2026-03-02",
-        "value": 89.78257751464844
+        "value": 89.78258514404297
       },
       {
         "date": "2026-03-03",
-        "value": 89.79241180419922
+        "value": 89.79240417480469
       },
       {
         "date": "2026-03-04",
@@ -5515,35 +5486,35 @@
       },
       {
         "date": "2026-03-05",
-        "value": 89.81204986572266
+        "value": 89.81205749511719
       },
       {
         "date": "2026-03-06",
-        "value": 89.83169555664062
+        "value": 89.83170318603516
       },
       {
         "date": "2026-03-09",
-        "value": 89.84152221679688
+        "value": 89.84151458740234
       },
       {
         "date": "2026-03-10",
-        "value": 89.85135650634766
+        "value": 89.85134887695312
       },
       {
         "date": "2026-03-11",
-        "value": 89.85135650634766
+        "value": 89.85134887695312
       },
       {
         "date": "2026-03-12",
-        "value": 89.8709945678711
+        "value": 89.87100219726562
       },
       {
         "date": "2026-03-13",
-        "value": 89.90045928955078
+        "value": 89.90047454833984
       },
       {
         "date": "2026-03-16",
-        "value": 89.90045928955078
+        "value": 89.90047454833984
       },
       {
         "date": "2026-03-17",
@@ -5551,15 +5522,15 @@
       },
       {
         "date": "2026-03-18",
-        "value": 89.92994689941406
+        "value": 89.92993927001953
       },
       {
         "date": "2026-03-19",
-        "value": 89.92994689941406
+        "value": 89.92993927001953
       },
       {
         "date": "2026-03-20",
-        "value": 89.95941162109375
+        "value": 89.95941925048828
       },
       {
         "date": "2026-03-23",
@@ -5567,7 +5538,7 @@
       },
       {
         "date": "2026-03-24",
-        "value": 89.97907257080078
+        "value": 89.97905731201172
       },
       {
         "date": "2026-03-25",
@@ -5575,11 +5546,11 @@
       },
       {
         "date": "2026-03-26",
-        "value": 89.98889923095703
+        "value": 89.98888397216797
       },
       {
         "date": "2026-03-27",
-        "value": 90.01835632324219
+        "value": 90.01834869384766
       },
       {
         "date": "2026-03-30",
@@ -5591,35 +5562,35 @@
       },
       {
         "date": "2026-04-01",
-        "value": 90.05183410644531
+        "value": 90.05182647705078
       },
       {
         "date": "2026-04-02",
-        "value": 90.07152557373047
+        "value": 90.071533203125
       },
       {
         "date": "2026-04-06",
-        "value": 90.09123229980469
+        "value": 90.09123992919922
       },
       {
         "date": "2026-04-07",
-        "value": 90.10108947753906
+        "value": 90.10108184814453
       },
       {
         "date": "2026-04-08",
-        "value": 90.10108947753906
+        "value": 90.10108184814453
       },
       {
         "date": "2026-04-09",
-        "value": 90.11094665527344
+        "value": 90.1109390258789
       },
       {
         "date": "2026-04-10",
-        "value": 90.14048767089844
+        "value": 90.14049530029297
       },
       {
         "date": "2026-04-13",
-        "value": 90.14048767089844
+        "value": 90.14049530029297
       },
       {
         "date": "2026-04-14",
@@ -5627,11 +5598,11 @@
       },
       {
         "date": "2026-04-15",
-        "value": 90.16020202636719
+        "value": 90.16020965576172
       },
       {
         "date": "2026-04-16",
-        "value": 90.17005920410156
+        "value": 90.17005157470703
       },
       {
         "date": "2026-04-17",
@@ -5651,7 +5622,7 @@
       },
       {
         "date": "2026-04-23",
-        "value": 90.23902893066406
+        "value": 90.23902130126953
       },
       {
         "date": "2026-04-24",
@@ -5683,7 +5654,7 @@
       },
       {
         "date": "2026-05-05",
-        "value": 90.34757995605469
+        "value": 90.34757232666016
       },
       {
         "date": "2026-05-06",
@@ -5695,47 +5666,47 @@
       },
       {
         "date": "2026-05-08",
-        "value": 90.37722778320312
+        "value": 90.3772201538086
       },
       {
         "date": "2026-05-11",
-        "value": 90.3969955444336
+        "value": 90.39698791503906
       },
       {
         "date": "2026-05-12",
-        "value": 90.40686798095703
+        "value": 90.4068603515625
       },
       {
         "date": "2026-05-13",
-        "value": 90.40686798095703
+        "value": 90.4068603515625
       },
       {
         "date": "2026-05-14",
-        "value": 90.42662811279297
+        "value": 90.4266357421875
       },
       {
         "date": "2026-05-15",
-        "value": 90.44640350341797
+        "value": 90.4463882446289
       },
       {
         "date": "2026-05-18",
-        "value": 90.44640350341797
+        "value": 90.4463882446289
       },
       {
         "date": "2026-05-19",
-        "value": 90.4661636352539
+        "value": 90.46615600585938
       },
       {
         "date": "2026-05-20",
-        "value": 90.48591613769531
+        "value": 90.48592376708984
       },
       {
         "date": "2026-05-21",
-        "value": 90.48591613769531
+        "value": 90.48592376708984
       },
       {
         "date": "2026-05-22",
-        "value": 90.50568389892578
+        "value": 90.50567626953125
       },
       {
         "date": "2026-05-26",
@@ -5751,7 +5722,7 @@
       },
       {
         "date": "2026-05-29",
-        "value": 90.57485961914062
+        "value": 90.5748519897461
       },
       {
         "date": "2026-06-01",
@@ -5759,7 +5730,7 @@
       },
       {
         "date": "2026-06-02",
-        "value": 90.57386016845703
+        "value": 90.57386779785156
       },
       {
         "date": "2026-06-03",
@@ -5771,15 +5742,15 @@
       },
       {
         "date": "2026-06-05",
-        "value": 90.63331604003906
+        "value": 90.6333236694336
       },
       {
         "date": "2026-06-08",
-        "value": 90.64324188232422
+        "value": 90.64323425292969
       },
       {
         "date": "2026-06-09",
-        "value": 90.64324188232422
+        "value": 90.64323425292969
       },
       {
         "date": "2026-06-10",
@@ -5827,15 +5798,15 @@
       },
       {
         "date": "2026-06-26",
-        "value": 90.81172180175781
+        "value": 90.81171417236328
       },
       {
         "date": "2026-06-29",
-        "value": 90.8216323852539
+        "value": 90.82162475585938
       },
       {
         "date": "2026-06-30",
-        "value": 90.8216323852539
+        "value": 90.82162475585938
       },
       {
         "date": "2026-07-01",
@@ -5887,11 +5858,11 @@
       },
       {
         "date": "2026-07-20",
-        "value": 91.00849914550781
+        "value": 91.00849151611328
       },
       {
         "date": "2026-07-21",
-        "value": 91.00849914550781
+        "value": 91.00849151611328
       },
       {
         "date": "2026-07-22",
@@ -5919,7 +5890,7 @@
       },
       {
         "date": "2026-07-30",
-        "value": 91.09796142578125
+        "value": 91.09795379638672
       },
       {
         "date": "2026-07-31",
@@ -6061,7 +6032,7 @@
       },
       {
         "date": "2026-02-10",
-        "value": 86.21907043457031
+        "value": 86.21906280517578
       },
       {
         "date": "2026-02-11",
@@ -6077,23 +6048,23 @@
       },
       {
         "date": "2026-02-17",
-        "value": 87.52409362792969
+        "value": 87.52410125732422
       },
       {
         "date": "2026-02-18",
-        "value": 87.1929702758789
+        "value": 87.19296264648438
       },
       {
         "date": "2026-02-19",
-        "value": 87.2806167602539
+        "value": 87.28062438964844
       },
       {
         "date": "2026-02-20",
-        "value": 87.07611083984375
+        "value": 87.07610321044922
       },
       {
         "date": "2026-02-23",
-        "value": 87.3974838256836
+        "value": 87.39747619628906
       },
       {
         "date": "2026-02-24",
@@ -6101,23 +6072,23 @@
       },
       {
         "date": "2026-02-25",
-        "value": 87.56304931640625
+        "value": 87.56305694580078
       },
       {
         "date": "2026-02-26",
-        "value": 87.91364288330078
+        "value": 87.91365051269531
       },
       {
         "date": "2026-02-27",
-        "value": 88.44929504394531
+        "value": 88.44928741455078
       },
       {
         "date": "2026-03-02",
-        "value": 87.56108093261719
+        "value": 87.56108856201172
       },
       {
         "date": "2026-03-03",
-        "value": 87.38520050048828
+        "value": 87.38519287109375
       },
       {
         "date": "2026-03-04",
@@ -6129,7 +6100,7 @@
       },
       {
         "date": "2026-03-06",
-        "value": 86.43737030029297
+        "value": 86.43736267089844
       },
       {
         "date": "2026-03-09",
@@ -6157,7 +6128,7 @@
       },
       {
         "date": "2026-03-17",
-        "value": 85.4504623413086
+        "value": 85.45046997070312
       },
       {
         "date": "2026-03-18",
@@ -6165,7 +6136,7 @@
       },
       {
         "date": "2026-03-19",
-        "value": 85.48954772949219
+        "value": 85.48955535888672
       },
       {
         "date": "2026-03-20",
@@ -6177,11 +6148,11 @@
       },
       {
         "date": "2026-03-24",
-        "value": 84.04339599609375
+        "value": 84.04338073730469
       },
       {
         "date": "2026-03-25",
-        "value": 84.85441589355469
+        "value": 84.85440826416016
       },
       {
         "date": "2026-03-26",
@@ -6189,7 +6160,7 @@
       },
       {
         "date": "2026-03-27",
-        "value": 83.68184661865234
+        "value": 83.68185424804688
       },
       {
         "date": "2026-03-30",
@@ -6197,11 +6168,11 @@
       },
       {
         "date": "2026-03-31",
-        "value": 84.70783996582031
+        "value": 84.70784759521484
       },
       {
         "date": "2026-04-01",
-        "value": 84.62445068359375
+        "value": 84.62445831298828
       },
       {
         "date": "2026-04-02",
@@ -6209,15 +6180,15 @@
       },
       {
         "date": "2026-04-06",
-        "value": 85.0070571899414
+        "value": 85.00706481933594
       },
       {
         "date": "2026-04-07",
-        "value": 84.99724578857422
+        "value": 84.99725341796875
       },
       {
         "date": "2026-04-08",
-        "value": 85.27193450927734
+        "value": 85.27194213867188
       },
       {
         "date": "2026-04-09",
@@ -6229,15 +6200,15 @@
       },
       {
         "date": "2026-04-13",
-        "value": 85.10515594482422
+        "value": 85.10516357421875
       },
       {
         "date": "2026-04-14",
-        "value": 85.55644226074219
+        "value": 85.55643463134766
       },
       {
         "date": "2026-04-15",
-        "value": 85.18365478515625
+        "value": 85.18364715576172
       },
       {
         "date": "2026-04-16",
@@ -6249,7 +6220,7 @@
       },
       {
         "date": "2026-04-20",
-        "value": 85.39947509765625
+        "value": 85.39948272705078
       },
       {
         "date": "2026-04-21",
@@ -6257,15 +6228,15 @@
       },
       {
         "date": "2026-04-22",
-        "value": 85.09534454345703
+        "value": 85.09535217285156
       },
       {
         "date": "2026-04-23",
-        "value": 84.90895080566406
+        "value": 84.9089584350586
       },
       {
         "date": "2026-04-24",
-        "value": 85.06591796875
+        "value": 85.06591033935547
       },
       {
         "date": "2026-04-27",
@@ -6281,11 +6252,11 @@
       },
       {
         "date": "2026-04-30",
-        "value": 83.99658966064453
+        "value": 83.99658203125
       },
       {
         "date": "2026-05-01",
-        "value": 84.29690551757812
+        "value": 84.29691314697266
       },
       {
         "date": "2026-05-04",
@@ -6301,7 +6272,7 @@
       },
       {
         "date": "2026-05-07",
-        "value": 84.33629608154297
+        "value": 84.33628845214844
       },
       {
         "date": "2026-05-08",
@@ -6313,27 +6284,27 @@
       },
       {
         "date": "2026-05-12",
-        "value": 83.68641662597656
+        "value": 83.68640899658203
       },
       {
         "date": "2026-05-13",
-        "value": 83.49933624267578
+        "value": 83.49934387207031
       },
       {
         "date": "2026-05-14",
-        "value": 83.61749267578125
+        "value": 83.61748504638672
       },
       {
         "date": "2026-05-15",
-        "value": 82.37681579589844
+        "value": 82.37682342529297
       },
       {
         "date": "2026-05-18",
-        "value": 82.27835083007812
+        "value": 82.2783432006836
       },
       {
         "date": "2026-05-19",
-        "value": 81.74663543701172
+        "value": 81.74662780761719
       },
       {
         "date": "2026-05-20",
@@ -6349,7 +6320,7 @@
       },
       {
         "date": "2026-05-26",
-        "value": 83.79472351074219
+        "value": 83.79473114013672
       },
       {
         "date": "2026-05-27",
@@ -6357,11 +6328,11 @@
       },
       {
         "date": "2026-05-28",
-        "value": 84.42491912841797
+        "value": 84.42491149902344
       },
       {
         "date": "2026-05-29",
-        "value": 84.44461822509766
+        "value": 84.4446029663086
       },
       {
         "date": "2026-06-01",
@@ -6369,7 +6340,7 @@
       },
       {
         "date": "2026-06-02",
-        "value": 84.66802215576172
+        "value": 84.66801452636719
       },
       {
         "date": "2026-06-03",
@@ -6377,7 +6348,7 @@
       },
       {
         "date": "2026-06-04",
-        "value": 84.51973724365234
+        "value": 84.51972961425781
       },
       {
         "date": "2026-06-05",
@@ -6385,7 +6356,7 @@
       },
       {
         "date": "2026-06-08",
-        "value": 83.64982604980469
+        "value": 83.64983367919922
       },
       {
         "date": "2026-06-09",
@@ -6393,11 +6364,11 @@
       },
       {
         "date": "2026-06-10",
-        "value": 83.90684509277344
+        "value": 83.9068374633789
       },
       {
         "date": "2026-06-11",
-        "value": 84.99423217773438
+        "value": 84.9942398071289
       },
       {
         "date": "2026-06-12",
@@ -6433,11 +6404,11 @@
       },
       {
         "date": "2026-06-25",
-        "value": 86.34852600097656
+        "value": 86.3485336303711
       },
       {
         "date": "2026-06-26",
-        "value": 86.35841369628906
+        "value": 86.3584213256836
       },
       {
         "date": "2026-06-29",
@@ -10969,7 +10940,7 @@
       },
       {
         "date": "2026-02-20",
-        "value": 86.79581451416016
+        "value": 86.79582214355469
       },
       {
         "date": "2026-02-23",
@@ -10993,7 +10964,7 @@
       },
       {
         "date": "2026-03-02",
-        "value": 87.6056137084961
+        "value": 87.60560607910156
       },
       {
         "date": "2026-03-03",
@@ -11009,7 +10980,7 @@
       },
       {
         "date": "2026-03-06",
-        "value": 84.71208190917969
+        "value": 84.71208953857422
       },
       {
         "date": "2026-03-09",
@@ -11017,7 +10988,7 @@
       },
       {
         "date": "2026-03-10",
-        "value": 84.65283203125
+        "value": 84.65283966064453
       },
       {
         "date": "2026-03-11",
@@ -11029,7 +11000,7 @@
       },
       {
         "date": "2026-03-13",
-        "value": 83.68502807617188
+        "value": 83.6850357055664
       },
       {
         "date": "2026-03-16",
@@ -11041,11 +11012,11 @@
       },
       {
         "date": "2026-03-18",
-        "value": 81.61117553710938
+        "value": 81.6111831665039
       },
       {
         "date": "2026-03-19",
-        "value": 80.94951629638672
+        "value": 80.94952392578125
       },
       {
         "date": "2026-03-20",
@@ -12873,7 +12844,7 @@
       },
       {
         "date": "2026-09-17",
-        "value": 76282.0390625
+        "value": 76160.9609375
       }
     ],
     "Crypto ex-BTC": [
@@ -13595,7 +13566,7 @@
       },
       {
         "date": "2026-09-17",
-        "value": 2430.659912109375
+        "value": 2425.340087890625
       }
     ],
     "Emerging-Market Stocks": [
@@ -14211,51 +14182,51 @@
     "Emerging-Market Bonds": [
       {
         "date": "2026-02-09",
-        "value": 93.82170104980469
+        "value": 93.82171630859375
       },
       {
         "date": "2026-02-10",
-        "value": 94.06421661376953
+        "value": 94.06422424316406
       },
       {
         "date": "2026-02-11",
-        "value": 94.07392883300781
+        "value": 94.07391357421875
       },
       {
         "date": "2026-02-12",
-        "value": 94.33582305908203
+        "value": 94.3358383178711
       },
       {
         "date": "2026-02-13",
-        "value": 94.50072479248047
+        "value": 94.50074005126953
       },
       {
         "date": "2026-02-17",
-        "value": 94.69475555419922
+        "value": 94.69474792480469
       },
       {
         "date": "2026-02-18",
-        "value": 94.73353576660156
+        "value": 94.7335433959961
       },
       {
         "date": "2026-02-19",
-        "value": 94.62684631347656
+        "value": 94.6268539428711
       },
       {
         "date": "2026-02-20",
-        "value": 94.72384643554688
+        "value": 94.72383117675781
       },
       {
         "date": "2026-02-23",
-        "value": 94.78205108642578
+        "value": 94.78204345703125
       },
       {
         "date": "2026-02-24",
-        "value": 94.72384643554688
+        "value": 94.72383117675781
       },
       {
         "date": "2026-02-25",
-        "value": 94.8111343383789
+        "value": 94.81114959716797
       },
       {
         "date": "2026-02-26",
@@ -14263,31 +14234,31 @@
       },
       {
         "date": "2026-02-27",
-        "value": 94.80145263671875
+        "value": 94.80144500732422
       },
       {
         "date": "2026-03-02",
-        "value": 94.47319030761719
+        "value": 94.47318267822266
       },
       {
         "date": "2026-03-03",
-        "value": 94.04461669921875
+        "value": 94.04460144042969
       },
       {
         "date": "2026-03-04",
-        "value": 94.3563003540039
+        "value": 94.35630798339844
       },
       {
         "date": "2026-03-05",
-        "value": 93.87901306152344
+        "value": 93.87902069091797
       },
       {
         "date": "2026-03-06",
-        "value": 93.265380859375
+        "value": 93.26536560058594
       },
       {
         "date": "2026-03-09",
-        "value": 93.46991729736328
+        "value": 93.46990966796875
       },
       {
         "date": "2026-03-10",
@@ -14299,11 +14270,11 @@
       },
       {
         "date": "2026-03-12",
-        "value": 92.37897491455078
+        "value": 92.37899017333984
       },
       {
         "date": "2026-03-13",
-        "value": 91.93091583251953
+        "value": 91.930908203125
       },
       {
         "date": "2026-03-16",
@@ -14311,7 +14282,7 @@
       },
       {
         "date": "2026-03-17",
-        "value": 92.63224029541016
+        "value": 92.63223266601562
       },
       {
         "date": "2026-03-18",
@@ -14319,7 +14290,7 @@
       },
       {
         "date": "2026-03-19",
-        "value": 92.1744384765625
+        "value": 92.17442321777344
       },
       {
         "date": "2026-03-20",
@@ -14331,15 +14302,15 @@
       },
       {
         "date": "2026-03-24",
-        "value": 91.15169525146484
+        "value": 91.15167999267578
       },
       {
         "date": "2026-03-25",
-        "value": 91.9796142578125
+        "value": 91.97962951660156
       },
       {
         "date": "2026-03-26",
-        "value": 91.03478240966797
+        "value": 91.0347900390625
       },
       {
         "date": "2026-03-27",
@@ -14351,15 +14322,15 @@
       },
       {
         "date": "2026-03-31",
-        "value": 91.49259185791016
+        "value": 91.49259948730469
       },
       {
         "date": "2026-04-01",
-        "value": 91.86943817138672
+        "value": 91.86943054199219
       },
       {
         "date": "2026-04-02",
-        "value": 91.97710418701172
+        "value": 91.97709655761719
       },
       {
         "date": "2026-04-06",
@@ -14367,11 +14338,11 @@
       },
       {
         "date": "2026-04-07",
-        "value": 91.99667358398438
+        "value": 91.99666595458984
       },
       {
         "date": "2026-04-08",
-        "value": 93.0929183959961
+        "value": 93.09291076660156
       },
       {
         "date": "2026-04-09",
@@ -14383,7 +14354,7 @@
       },
       {
         "date": "2026-04-13",
-        "value": 93.993408203125
+        "value": 93.99340057373047
       },
       {
         "date": "2026-04-14",
@@ -14391,11 +14362,11 @@
       },
       {
         "date": "2026-04-15",
-        "value": 94.208740234375
+        "value": 94.20874786376953
       },
       {
         "date": "2026-04-16",
-        "value": 93.91510009765625
+        "value": 93.91511535644531
       },
       {
         "date": "2026-04-17",
@@ -14403,31 +14374,31 @@
       },
       {
         "date": "2026-04-20",
-        "value": 94.54151916503906
+        "value": 94.5415267944336
       },
       {
         "date": "2026-04-21",
-        "value": 94.0912857055664
+        "value": 94.09127807617188
       },
       {
         "date": "2026-04-22",
-        "value": 94.33598327636719
+        "value": 94.33597564697266
       },
       {
         "date": "2026-04-23",
-        "value": 93.8955307006836
+        "value": 93.89553833007812
       },
       {
         "date": "2026-04-24",
-        "value": 94.15979766845703
+        "value": 94.15980529785156
       },
       {
         "date": "2026-04-27",
-        "value": 93.993408203125
+        "value": 93.99340057373047
       },
       {
         "date": "2026-04-28",
-        "value": 93.91510009765625
+        "value": 93.91511535644531
       },
       {
         "date": "2026-04-29",
@@ -14439,27 +14410,27 @@
       },
       {
         "date": "2026-05-01",
-        "value": 93.94522857666016
+        "value": 93.94522094726562
       },
       {
         "date": "2026-05-04",
-        "value": 93.46356201171875
+        "value": 93.46355438232422
       },
       {
         "date": "2026-05-05",
-        "value": 93.89607238769531
+        "value": 93.89606475830078
       },
       {
         "date": "2026-05-06",
-        "value": 94.63331604003906
+        "value": 94.6333236694336
       },
       {
         "date": "2026-05-07",
-        "value": 94.26962280273438
+        "value": 94.26961517333984
       },
       {
         "date": "2026-05-08",
-        "value": 94.51537322998047
+        "value": 94.51536560058594
       },
       {
         "date": "2026-05-11",
@@ -14471,31 +14442,31 @@
       },
       {
         "date": "2026-05-13",
-        "value": 93.91573333740234
+        "value": 93.91574096679688
       },
       {
         "date": "2026-05-14",
-        "value": 93.91573333740234
+        "value": 93.91574096679688
       },
       {
         "date": "2026-05-15",
-        "value": 93.09983825683594
+        "value": 93.099853515625
       },
       {
         "date": "2026-05-18",
-        "value": 93.0113754272461
+        "value": 93.01138305664062
       },
       {
         "date": "2026-05-19",
-        "value": 92.64765930175781
+        "value": 92.64766693115234
       },
       {
         "date": "2026-05-20",
-        "value": 93.30626678466797
+        "value": 93.3062744140625
       },
       {
         "date": "2026-05-21",
-        "value": 93.37508392333984
+        "value": 93.37509155273438
       },
       {
         "date": "2026-05-22",
@@ -14523,7 +14494,7 @@
       },
       {
         "date": "2026-06-02",
-        "value": 95.0245590209961
+        "value": 95.02456665039062
       },
       {
         "date": "2026-06-03",
@@ -14531,7 +14502,7 @@
       },
       {
         "date": "2026-06-04",
-        "value": 94.86661529541016
+        "value": 94.86660766601562
       },
       {
         "date": "2026-06-05",
@@ -14555,7 +14526,7 @@
       },
       {
         "date": "2026-06-12",
-        "value": 95.12327575683594
+        "value": 95.12328338623047
       },
       {
         "date": "2026-06-15",
@@ -14567,11 +14538,11 @@
       },
       {
         "date": "2026-06-17",
-        "value": 95.04430389404297
+        "value": 95.04429626464844
       },
       {
         "date": "2026-06-18",
-        "value": 95.48853302001953
+        "value": 95.48854064941406
       },
       {
         "date": "2026-06-22",
@@ -14579,7 +14550,7 @@
       },
       {
         "date": "2026-06-23",
-        "value": 95.0245590209961
+        "value": 95.02456665039062
       },
       {
         "date": "2026-06-24",
@@ -14587,7 +14558,7 @@
       },
       {
         "date": "2026-06-25",
-        "value": 95.3207015991211
+        "value": 95.32070922851562
       },
       {
         "date": "2026-06-26",
@@ -14599,11 +14570,11 @@
       },
       {
         "date": "2026-06-30",
-        "value": 95.20225524902344
+        "value": 95.2022476196289
       },
       {
         "date": "2026-07-01",
-        "value": 95.18241882324219
+        "value": 95.18242645263672
       },
       {
         "date": "2026-07-02",
@@ -14615,7 +14586,7 @@
       },
       {
         "date": "2026-07-07",
-        "value": 95.1031265258789
+        "value": 95.10311889648438
       },
       {
         "date": "2026-07-08",
@@ -14627,7 +14598,7 @@
       },
       {
         "date": "2026-07-10",
-        "value": 95.15267944335938
+        "value": 95.1526870727539
       },
       {
         "date": "2026-07-13",
@@ -14635,7 +14606,7 @@
       },
       {
         "date": "2026-07-14",
-        "value": 94.7363510131836
+        "value": 94.73634338378906
       },
       {
         "date": "2026-07-15",
@@ -14647,7 +14618,7 @@
       },
       {
         "date": "2026-07-17",
-        "value": 94.69670104980469
+        "value": 94.69669342041016
       },
       {
         "date": "2026-07-20",
@@ -14663,7 +14634,7 @@
       },
       {
         "date": "2026-07-23",
-        "value": 93.70541381835938
+        "value": 93.7054214477539
       },
       {
         "date": "2026-07-24",
@@ -14675,7 +14646,7 @@
       },
       {
         "date": "2026-07-28",
-        "value": 94.35967254638672
+        "value": 94.35966491699219
       },
       {
         "date": "2026-07-29",
@@ -14822,744 +14793,744 @@
   "risk_history": [
     {
       "date": "2026-03-21",
-      "overall_risk": 42.03,
-      "Liquidity": 21.27,
+      "overall_risk": 40.04,
+      "Liquidity": 23.62,
       "Credit": 59.87,
       "Rates": 43.85,
       "Market / Macro": 54.94,
-      "Inflationary Pressure": 40.78,
+      "Inflationary Pressure": null,
       "FX Stress": 0.91,
       "Real Yield": 75.8,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-03-24",
-      "overall_risk": 44.13,
-      "Liquidity": 22.41,
+      "overall_risk": 41.72,
+      "Liquidity": 23.56,
       "Credit": 54.04,
       "Rates": 51.89,
       "Market / Macro": 60.56,
-      "Inflationary Pressure": 45.06,
+      "Inflationary Pressure": null,
       "FX Stress": 4.58,
       "Real Yield": 80.8,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-03-27",
-      "overall_risk": 45.09,
-      "Liquidity": 23.27,
+      "overall_risk": 42.91,
+      "Liquidity": 25.86,
       "Credit": 70.39,
       "Rates": 36.97,
       "Market / Macro": 59.69,
-      "Inflationary Pressure": 38.42,
+      "Inflationary Pressure": null,
       "FX Stress": 7.65,
       "Real Yield": 86.9,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-03-30",
-      "overall_risk": 44.18,
-      "Liquidity": 23.38,
+      "overall_risk": 42.01,
+      "Liquidity": 26.02,
       "Credit": 74.01,
       "Rates": 33.97,
       "Market / Macro": 55.46,
-      "Inflationary Pressure": 36.84,
+      "Inflationary Pressure": null,
       "FX Stress": 9.1,
       "Real Yield": 78.7,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-02",
-      "overall_risk": 38.25,
-      "Liquidity": 23.63,
+      "overall_risk": 34.8,
+      "Liquidity": 21.07,
       "Credit": 51.05,
       "Rates": 43.06,
       "Market / Macro": 45.16,
-      "Inflationary Pressure": 41.81,
+      "Inflationary Pressure": null,
       "FX Stress": 3.28,
       "Real Yield": 69.1,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-05",
-      "overall_risk": 37.07,
-      "Liquidity": 23.68,
+      "overall_risk": 33.62,
+      "Liquidity": 21.14,
       "Credit": 46.79,
       "Rates": 36.19,
       "Market / Macro": 47.85,
-      "Inflationary Pressure": 39.09,
+      "Inflationary Pressure": null,
       "FX Stress": 2.0,
       "Real Yield": 71.8,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-08",
-      "overall_risk": 28.2,
-      "Liquidity": 10.9,
+      "overall_risk": 27.14,
+      "Liquidity": 11.9,
       "Credit": 32.06,
       "Rates": 32.17,
       "Market / Macro": 45.43,
-      "Inflationary Pressure": 32.76,
+      "Inflationary Pressure": null,
       "FX Stress": 5.49,
       "Real Yield": 67.1,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-11",
-      "overall_risk": 28.98,
-      "Liquidity": 12.88,
+      "overall_risk": 27.18,
+      "Liquidity": 11.81,
       "Credit": 30.51,
       "Rates": 32.1,
       "Market / Macro": 46.8,
-      "Inflationary Pressure": 33.68,
+      "Inflationary Pressure": null,
       "FX Stress": 0.75,
       "Real Yield": 65.6,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-14",
-      "overall_risk": 28.82,
-      "Liquidity": 16.32,
+      "overall_risk": 25.73,
+      "Liquidity": 11.61,
       "Credit": 20.26,
       "Rates": 31.79,
       "Market / Macro": 49.3,
-      "Inflationary Pressure": 35.24,
+      "Inflationary Pressure": null,
       "FX Stress": 5.76,
       "Real Yield": 56.5,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-17",
-      "overall_risk": 28.65,
-      "Liquidity": 16.5,
+      "overall_risk": 25.62,
+      "Liquidity": 12.15,
       "Credit": 17.73,
       "Rates": 33.84,
       "Market / Macro": 49.1,
-      "Inflationary Pressure": 35.11,
+      "Inflationary Pressure": null,
       "FX Stress": 5.92,
       "Real Yield": 57.1,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-20",
-      "overall_risk": 30.88,
-      "Liquidity": 14.84,
+      "overall_risk": 28.47,
+      "Liquidity": 12.21,
       "Credit": 23.69,
       "Rates": 32.02,
       "Market / Macro": 55.99,
-      "Inflationary Pressure": 33.45,
+      "Inflationary Pressure": null,
       "FX Stress": 1.29,
       "Real Yield": 58.9,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-23",
-      "overall_risk": 35.79,
-      "Liquidity": 27.01,
+      "overall_risk": 33.01,
+      "Liquidity": 28.91,
       "Credit": 20.54,
       "Rates": 30.54,
       "Market / Macro": 60.98,
-      "Inflationary Pressure": 34.95,
+      "Inflationary Pressure": null,
       "FX Stress": 0.28,
       "Real Yield": 60.1,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-26",
-      "overall_risk": 35.81,
-      "Liquidity": 28.2,
+      "overall_risk": 32.6,
+      "Liquidity": 28.92,
       "Credit": 20.51,
       "Rates": 31.46,
       "Market / Macro": 59.0,
-      "Inflationary Pressure": 35.4,
+      "Inflationary Pressure": null,
       "FX Stress": 0.04,
       "Real Yield": 55.7,
       "Fed Balance Sheet": 0.83
     },
     {
       "date": "2026-04-29",
-      "overall_risk": 36.4,
-      "Liquidity": 30.14,
+      "overall_risk": 34.11,
+      "Liquidity": 35.67,
       "Credit": 19.11,
       "Rates": 39.84,
       "Market / Macro": 54.84,
-      "Inflationary Pressure": 39.43,
+      "Inflationary Pressure": null,
       "FX Stress": 1.01,
       "Real Yield": 67.0,
       "Fed Balance Sheet": 1.67
     },
     {
       "date": "2026-05-02",
-      "overall_risk": 33.68,
-      "Liquidity": 30.13,
+      "overall_risk": 31.32,
+      "Liquidity": 35.37,
       "Credit": 16.22,
       "Rates": 34.27,
       "Market / Macro": 50.38,
-      "Inflationary Pressure": 36.38,
+      "Inflationary Pressure": null,
       "FX Stress": 5.92,
       "Real Yield": 58.1,
       "Fed Balance Sheet": 1.67
     },
     {
       "date": "2026-05-05",
-      "overall_risk": 33.59,
-      "Liquidity": 28.49,
+      "overall_risk": 31.85,
+      "Liquidity": 35.47,
       "Credit": 12.31,
       "Rates": 35.96,
       "Market / Macro": 53.99,
-      "Inflationary Pressure": 37.05,
+      "Inflationary Pressure": null,
       "FX Stress": 3.58,
       "Real Yield": 66.9,
       "Fed Balance Sheet": 1.67
     },
     {
       "date": "2026-05-08",
-      "overall_risk": 32.1,
-      "Liquidity": 21.21,
+      "overall_risk": 30.7,
+      "Liquidity": 25.99,
       "Credit": 14.75,
       "Rates": 28.93,
       "Market / Macro": 60.31,
-      "Inflationary Pressure": 32.14,
+      "Inflationary Pressure": null,
       "FX Stress": 1.91,
       "Real Yield": 61.9,
       "Fed Balance Sheet": 3.33
     },
     {
       "date": "2026-05-11",
-      "overall_risk": 31.52,
-      "Liquidity": 20.88,
+      "overall_risk": 30.24,
+      "Liquidity": 25.99,
       "Credit": 12.07,
       "Rates": 29.39,
       "Market / Macro": 60.31,
-      "Inflationary Pressure": 33.13,
+      "Inflationary Pressure": null,
       "FX Stress": 1.63,
       "Real Yield": 65.1,
       "Fed Balance Sheet": 3.33
     },
     {
       "date": "2026-05-14",
-      "overall_risk": 30.99,
-      "Liquidity": 18.07,
+      "overall_risk": 30.15,
+      "Liquidity": 23.61,
       "Credit": 9.2,
       "Rates": 36.77,
       "Market / Macro": 59.86,
-      "Inflationary Pressure": 35.62,
+      "Inflationary Pressure": null,
       "FX Stress": 3.07,
       "Real Yield": 73.1,
       "Fed Balance Sheet": 4.17
     },
     {
       "date": "2026-05-17",
-      "overall_risk": 35.58,
-      "Liquidity": 18.58,
+      "overall_risk": 34.62,
+      "Liquidity": 23.87,
       "Credit": 10.53,
       "Rates": 50.67,
       "Market / Macro": 66.72,
-      "Inflationary Pressure": 42.48,
+      "Inflationary Pressure": null,
       "FX Stress": 8.15,
       "Real Yield": 84.7,
       "Fed Balance Sheet": 4.17
     },
     {
       "date": "2026-05-20",
-      "overall_risk": 27.29,
-      "Liquidity": 12.15,
+      "overall_risk": 27.05,
+      "Liquidity": 17.22,
       "Credit": 10.48,
       "Rates": 40.81,
       "Market / Macro": 51.03,
-      "Inflationary Pressure": 36.32,
+      "Inflationary Pressure": null,
       "FX Stress": 1.11,
       "Real Yield": 86.6,
       "Fed Balance Sheet": 7.5
     },
     {
       "date": "2026-05-23",
-      "overall_risk": 23.63,
-      "Liquidity": 14.18,
+      "overall_risk": 22.67,
+      "Liquidity": 17.27,
       "Credit": 6.76,
       "Rates": 37.96,
       "Market / Macro": 39.63,
-      "Inflationary Pressure": 37.03,
+      "Inflationary Pressure": null,
       "FX Stress": 1.39,
       "Real Yield": 89.0,
       "Fed Balance Sheet": 7.5
     },
     {
       "date": "2026-05-26",
-      "overall_risk": 26.82,
-      "Liquidity": 18.65,
+      "overall_risk": 24.24,
+      "Liquidity": 17.23,
       "Credit": 5.73,
       "Rates": 40.66,
       "Market / Macro": 44.5,
-      "Inflationary Pressure": 41.0,
+      "Inflationary Pressure": null,
       "FX Stress": 0.51,
       "Real Yield": 84.1,
       "Fed Balance Sheet": 7.5
     },
     {
       "date": "2026-05-29",
-      "overall_risk": 30.34,
-      "Liquidity": 26.92,
+      "overall_risk": 27.76,
+      "Liquidity": 29.64,
       "Credit": 5.6,
       "Rates": 42.36,
       "Market / Macro": 45.53,
-      "Inflationary Pressure": 41.12,
+      "Inflationary Pressure": null,
       "FX Stress": 1.21,
       "Real Yield": 80.5,
       "Fed Balance Sheet": 5.83
     },
     {
       "date": "2026-06-01",
-      "overall_risk": 32.56,
-      "Liquidity": 28.7,
+      "overall_risk": 29.37,
+      "Liquidity": 29.76,
       "Credit": 5.58,
       "Rates": 40.66,
       "Market / Macro": 52.16,
-      "Inflationary Pressure": 42.3,
+      "Inflationary Pressure": null,
       "FX Stress": 2.63,
       "Real Yield": 80.4,
       "Fed Balance Sheet": 5.83
     },
     {
       "date": "2026-06-04",
-      "overall_risk": 30.86,
-      "Liquidity": 30.17,
+      "overall_risk": 28.59,
+      "Liquidity": 35.78,
       "Credit": 7.36,
       "Rates": 38.51,
       "Market / Macro": 44.17,
-      "Inflationary Pressure": 39.94,
+      "Inflationary Pressure": null,
       "FX Stress": 1.38,
       "Real Yield": 84.7,
       "Fed Balance Sheet": 6.67
     },
     {
       "date": "2026-06-07",
-      "overall_risk": 34.86,
-      "Liquidity": 30.88,
+      "overall_risk": 32.4,
+      "Liquidity": 36.08,
       "Credit": 8.81,
       "Rates": 49.85,
       "Market / Macro": 49.99,
-      "Inflationary Pressure": 46.95,
+      "Inflationary Pressure": null,
       "FX Stress": 9.69,
       "Real Yield": 91.8,
       "Fed Balance Sheet": 6.67
     },
     {
       "date": "2026-06-10",
-      "overall_risk": 28.02,
-      "Liquidity": 16.88,
+      "overall_risk": 26.78,
+      "Liquidity": 20.17,
       "Credit": 12.19,
       "Rates": 41.6,
       "Market / Macro": 45.87,
-      "Inflationary Pressure": 40.83,
+      "Inflationary Pressure": null,
       "FX Stress": 4.03,
       "Real Yield": 93.2,
       "Fed Balance Sheet": 5.0
     },
     {
       "date": "2026-06-13",
-      "overall_risk": 23.43,
-      "Liquidity": 21.87,
+      "overall_risk": 20.35,
+      "Liquidity": 20.0,
       "Credit": 5.31,
       "Rates": 42.93,
       "Market / Macro": 27.22,
-      "Inflationary Pressure": 43.78,
+      "Inflationary Pressure": null,
       "FX Stress": 0.09,
       "Real Yield": 90.1,
       "Fed Balance Sheet": 5.0
     },
     {
       "date": "2026-06-16",
-      "overall_risk": 25.38,
-      "Liquidity": 20.03,
+      "overall_risk": 22.95,
+      "Liquidity": 19.9,
       "Credit": 6.36,
       "Rates": 43.29,
       "Market / Macro": 35.61,
-      "Inflationary Pressure": 42.38,
+      "Inflationary Pressure": null,
       "FX Stress": 0.19,
       "Real Yield": 86.7,
       "Fed Balance Sheet": 5.0
     },
     {
       "date": "2026-06-19",
-      "overall_risk": 27.15,
-      "Liquidity": 18.73,
+      "overall_risk": 25.14,
+      "Liquidity": 19.72,
       "Credit": 2.54,
       "Rates": 45.33,
       "Market / Macro": 45.18,
-      "Inflationary Pressure": 44.8,
+      "Inflationary Pressure": null,
       "FX Stress": 6.49,
       "Real Yield": 93.0,
       "Fed Balance Sheet": 4.17
     },
     {
       "date": "2026-06-22",
-      "overall_risk": 28.25,
-      "Liquidity": 18.25,
+      "overall_risk": 26.43,
+      "Liquidity": 19.78,
       "Credit": 2.18,
       "Rates": 47.42,
       "Market / Macro": 48.78,
-      "Inflationary Pressure": 45.94,
+      "Inflationary Pressure": null,
       "FX Stress": 5.27,
       "Real Yield": 96.4,
       "Fed Balance Sheet": 4.17
     },
     {
       "date": "2026-06-25",
-      "overall_risk": 29.76,
-      "Liquidity": 24.13,
+      "overall_risk": 27.14,
+      "Liquidity": 25.26,
       "Credit": 13.07,
       "Rates": 46.33,
       "Market / Macro": 39.45,
-      "Inflationary Pressure": 45.5,
+      "Inflationary Pressure": null,
       "FX Stress": 5.46,
       "Real Yield": 90.9,
       "Fed Balance Sheet": 9.17
     },
     {
       "date": "2026-06-28",
-      "overall_risk": 29.39,
-      "Liquidity": 22.38,
+      "overall_risk": 27.38,
+      "Liquidity": 25.19,
       "Credit": 18.33,
       "Rates": 46.23,
       "Market / Macro": 36.69,
-      "Inflationary Pressure": 44.16,
+      "Inflationary Pressure": null,
       "FX Stress": 4.97,
       "Real Yield": 89.8,
       "Fed Balance Sheet": 9.17
     },
     {
       "date": "2026-07-01",
-      "overall_risk": 27.86,
-      "Liquidity": 25.31,
+      "overall_risk": 24.51,
+      "Liquidity": 23.99,
       "Credit": 10.42,
       "Rates": 43.94,
       "Market / Macro": 34.41,
-      "Inflationary Pressure": 46.19,
+      "Inflationary Pressure": null,
       "FX Stress": 3.85,
       "Real Yield": 95.3,
       "Fed Balance Sheet": 10.0
     },
     {
       "date": "2026-07-04",
-      "overall_risk": 24.84,
-      "Liquidity": 23.48,
+      "overall_risk": 22.1,
+      "Liquidity": 23.8,
       "Credit": 9.06,
       "Rates": 43.96,
       "Market / Macro": 26.94,
-      "Inflationary Pressure": 44.7,
+      "Inflationary Pressure": null,
       "FX Stress": 5.19,
       "Real Yield": 95.6,
       "Fed Balance Sheet": 10.0
     },
     {
       "date": "2026-07-07",
-      "overall_risk": 27.54,
-      "Liquidity": 21.48,
+      "overall_risk": 25.53,
+      "Liquidity": 23.85,
       "Credit": 6.35,
       "Rates": 49.33,
       "Market / Macro": 38.0,
-      "Inflationary Pressure": 46.78,
+      "Inflationary Pressure": null,
       "FX Stress": 1.05,
       "Real Yield": 97.5,
       "Fed Balance Sheet": 10.0
     },
     {
       "date": "2026-07-10",
-      "overall_risk": 25.28,
-      "Liquidity": 11.44,
+      "overall_risk": 24.32,
+      "Liquidity": 13.16,
       "Credit": 8.65,
       "Rates": 44.66,
       "Market / Macro": 43.89,
-      "Inflationary Pressure": 41.39,
+      "Inflationary Pressure": null,
       "FX Stress": 1.87,
       "Real Yield": 97.5,
       "Fed Balance Sheet": 10.0
     },
     {
       "date": "2026-07-13",
-      "overall_risk": 26.98,
-      "Liquidity": 13.12,
+      "overall_risk": 25.44,
+      "Liquidity": 13.26,
       "Credit": 9.49,
       "Rates": 50.35,
       "Market / Macro": 43.95,
-      "Inflationary Pressure": 47.14,
+      "Inflationary Pressure": null,
       "FX Stress": 2.52,
       "Real Yield": 98.2,
       "Fed Balance Sheet": 10.0
     },
     {
       "date": "2026-07-16",
-      "overall_risk": 23.91,
-      "Liquidity": 14.64,
+      "overall_risk": 21.78,
+      "Liquidity": 13.09,
       "Credit": 10.59,
       "Rates": 39.64,
       "Market / Macro": 36.35,
-      "Inflationary Pressure": 41.73,
+      "Inflationary Pressure": null,
       "FX Stress": 0.53,
       "Real Yield": 98.1,
       "Fed Balance Sheet": 10.0
     },
     {
       "date": "2026-07-19",
-      "overall_risk": 24.32,
-      "Liquidity": 12.15,
+      "overall_risk": 23.11,
+      "Liquidity": 13.17,
       "Credit": 13.9,
       "Rates": 40.3,
       "Market / Macro": 38.28,
-      "Inflationary Pressure": 40.97,
+      "Inflationary Pressure": null,
       "FX Stress": 2.22,
       "Real Yield": 96.8,
       "Fed Balance Sheet": 10.0
     },
     {
       "date": "2026-07-22",
-      "overall_risk": 28.93,
-      "Liquidity": 22.74,
+      "overall_risk": 26.92,
+      "Liquidity": 25.73,
       "Credit": 8.79,
       "Rates": 52.02,
       "Market / Macro": 38.06,
-      "Inflationary Pressure": 49.62,
+      "Inflationary Pressure": null,
       "FX Stress": 0.19,
       "Real Yield": 98.4,
       "Fed Balance Sheet": 11.67
     },
     {
       "date": "2026-07-25",
-      "overall_risk": 30.93,
-      "Liquidity": 24.47,
+      "overall_risk": 28.31,
+      "Liquidity": 25.78,
       "Credit": 20.42,
       "Rates": 51.56,
       "Market / Macro": 34.95,
-      "Inflationary Pressure": 50.63,
+      "Inflationary Pressure": null,
       "FX Stress": 0.23,
       "Real Yield": 98.7,
       "Fed Balance Sheet": 11.67
     },
     {
       "date": "2026-07-28",
-      "overall_risk": 28.57,
-      "Liquidity": 25.3,
+      "overall_risk": 25.64,
+      "Liquidity": 25.75,
       "Credit": 26.99,
       "Rates": 39.45,
       "Market / Macro": 27.68,
-      "Inflationary Pressure": 44.47,
+      "Inflationary Pressure": null,
       "FX Stress": 0.09,
       "Real Yield": 98.2,
       "Fed Balance Sheet": 11.67
     },
     {
       "date": "2026-07-31",
-      "overall_risk": 32.72,
-      "Liquidity": 34.58,
+      "overall_risk": 29.36,
+      "Liquidity": 37.9,
       "Credit": 24.67,
       "Rates": 42.57,
       "Market / Macro": 30.44,
-      "Inflationary Pressure": 46.23,
+      "Inflationary Pressure": null,
       "FX Stress": 6.74,
       "Real Yield": 99.5,
       "Fed Balance Sheet": 14.17
     },
     {
       "date": "2026-08-03",
-      "overall_risk": 31.82,
-      "Liquidity": 33.4,
+      "overall_risk": 28.89,
+      "Liquidity": 37.89,
       "Credit": 16.29,
       "Rates": 43.21,
       "Market / Macro": 34.38,
-      "Inflationary Pressure": 45.5,
+      "Inflationary Pressure": null,
       "FX Stress": 15.79,
       "Real Yield": 98.4,
       "Fed Balance Sheet": 14.17
     },
     {
       "date": "2026-08-06",
-      "overall_risk": 30.01,
-      "Liquidity": 31.59,
+      "overall_risk": 27.08,
+      "Liquidity": 35.18,
       "Credit": 10.75,
       "Rates": 39.68,
       "Market / Macro": 36.2,
-      "Inflationary Pressure": 43.8,
+      "Inflationary Pressure": null,
       "FX Stress": 1.44,
       "Real Yield": 98.3,
       "Fed Balance Sheet": 14.17
     },
     {
       "date": "2026-08-09",
-      "overall_risk": 30.42,
-      "Liquidity": 29.25,
+      "overall_risk": 28.29,
+      "Liquidity": 34.99,
       "Credit": 10.49,
       "Rates": 46.26,
       "Market / Macro": 37.11,
-      "Inflationary Pressure": 44.21,
+      "Inflationary Pressure": null,
       "FX Stress": 6.84,
       "Real Yield": 97.3,
       "Fed Balance Sheet": 14.17
     },
     {
       "date": "2026-08-12",
-      "overall_risk": 28.73,
-      "Liquidity": 32.0,
+      "overall_risk": 26.72,
+      "Liquidity": 39.63,
       "Credit": 12.55,
       "Rates": 40.8,
       "Market / Macro": 29.18,
-      "Inflationary Pressure": 41.91,
+      "Inflationary Pressure": null,
       "FX Stress": 0,
       "Real Yield": 97.8,
       "Fed Balance Sheet": 12.5
     },
     {
       "date": "2026-08-15",
-      "overall_risk": 29.37,
-      "Liquidity": 32.28,
+      "overall_risk": 27.24,
+      "Liquidity": 39.54,
       "Credit": 11.84,
       "Rates": 39.85,
       "Market / Macro": 32.17,
-      "Inflationary Pressure": 40.85,
+      "Inflationary Pressure": null,
       "FX Stress": 0.21,
       "Real Yield": 97.2,
       "Fed Balance Sheet": 12.5
     },
     {
       "date": "2026-08-18",
-      "overall_risk": 34.33,
-      "Liquidity": 34.52,
+      "overall_risk": 31.4,
+      "Liquidity": 39.58,
       "Credit": 23.2,
       "Rates": 39.42,
       "Market / Macro": 39.13,
-      "Inflationary Pressure": 42.45,
+      "Inflationary Pressure": null,
       "FX Stress": 0.96,
       "Real Yield": 97.0,
       "Fed Balance Sheet": 12.5
     },
     {
       "date": "2026-08-21",
-      "overall_risk": 34.64,
-      "Liquidity": 38.22,
+      "overall_risk": 31.71,
+      "Liquidity": 45.13,
       "Credit": 16.45,
       "Rates": 43.09,
       "Market / Macro": 38.18,
-      "Inflationary Pressure": 44.45,
+      "Inflationary Pressure": null,
       "FX Stress": 4.07,
       "Real Yield": 96.6,
       "Fed Balance Sheet": 18.33
     },
     {
       "date": "2026-08-24",
-      "overall_risk": 34.75,
-      "Liquidity": 38.62,
+      "overall_risk": 31.7,
+      "Liquidity": 45.24,
       "Credit": 15.41,
       "Rates": 40.73,
       "Market / Macro": 40.15,
-      "Inflationary Pressure": 43.5,
+      "Inflationary Pressure": null,
       "FX Stress": 2.96,
       "Real Yield": 96.3,
       "Fed Balance Sheet": 18.33
     },
     {
       "date": "2026-08-27",
-      "overall_risk": 37.32,
-      "Liquidity": 50.54,
+      "overall_risk": 34.58,
+      "Liquidity": 64.39,
       "Credit": 7.44,
       "Rates": 38.16,
       "Market / Macro": 41.19,
-      "Inflationary Pressure": 41.25,
+      "Inflationary Pressure": null,
       "FX Stress": 0.07,
       "Real Yield": 94.8,
       "Fed Balance Sheet": 20.83
     },
     {
       "date": "2026-08-30",
-      "overall_risk": 38.47,
-      "Liquidity": 51.17,
+      "overall_risk": 35.55,
+      "Liquidity": 64.55,
       "Credit": 6.57,
       "Rates": 43.41,
       "Market / Macro": 42.12,
-      "Inflationary Pressure": 46.56,
+      "Inflationary Pressure": null,
       "FX Stress": 2.19,
       "Real Yield": 97.6,
       "Fed Balance Sheet": 20.83
     },
     {
       "date": "2026-09-02",
-      "overall_risk": 43.33,
-      "Liquidity": 53.3,
+      "overall_risk": 40.4,
+      "Liquidity": 67.75,
       "Credit": 13.44,
       "Rates": 53.05,
       "Market / Macro": 46.3,
-      "Inflationary Pressure": 51.34,
+      "Inflationary Pressure": null,
       "FX Stress": 3.18,
       "Real Yield": 99.0,
       "Fed Balance Sheet": 22.5
     },
     {
       "date": "2026-09-05",
-      "overall_risk": 41.08,
-      "Liquidity": 52.84,
+      "overall_risk": 38.28,
+      "Liquidity": 67.56,
       "Credit": 15.52,
       "Rates": 40.89,
       "Market / Macro": 44.34,
-      "Inflationary Pressure": 45.44,
+      "Inflationary Pressure": null,
       "FX Stress": 3.42,
       "Real Yield": 97.6,
       "Fed Balance Sheet": 22.5
     },
     {
       "date": "2026-09-08",
-      "overall_risk": 40.8,
-      "Liquidity": 51.95,
+      "overall_risk": 38.3,
+      "Liquidity": 67.5,
       "Credit": 14.74,
       "Rates": 41.97,
       "Market / Macro": 44.43,
-      "Inflationary Pressure": 45.55,
+      "Inflationary Pressure": null,
       "FX Stress": 13.35,
       "Real Yield": 97.5,
       "Fed Balance Sheet": 22.5
     },
     {
       "date": "2026-09-11",
-      "overall_risk": 34.47,
-      "Liquidity": 20.32,
+      "overall_risk": 32.46,
+      "Liquidity": 22.1,
       "Credit": 10.63,
       "Rates": 60.03,
       "Market / Macro": 55.1,
-      "Inflationary Pressure": 54.77,
+      "Inflationary Pressure": null,
       "FX Stress": 6.25,
       "Real Yield": 99.9,
       "Fed Balance Sheet": 21.67
     },
     {
       "date": "2026-09-14",
-      "overall_risk": 35.47,
-      "Liquidity": 20.32,
+      "overall_risk": 33.46,
+      "Liquidity": 22.1,
       "Credit": 16.17,
       "Rates": 59.66,
       "Market / Macro": 54.9,
-      "Inflationary Pressure": 54.73,
+      "Inflationary Pressure": null,
       "FX Stress": 6.25,
       "Real Yield": 99.8,
       "Fed Balance Sheet": 21.67
     },
     {
       "date": "2026-09-17",
-      "overall_risk": 35.44,
-      "Liquidity": 19.47,
+      "overall_risk": 33.73,
+      "Liquidity": 22.1,
       "Credit": 21.55,
       "Rates": 59.98,
       "Market / Macro": 51.86,
-      "Inflationary Pressure": 50.43,
+      "Inflationary Pressure": null,
       "FX Stress": 6.25,
       "Real Yield": 99.9,
       "Fed Balance Sheet": 21.67
     },
     {
       "date": "2026-09-17",
-      "overall_risk": 35.44,
-      "Liquidity": 19.47,
+      "overall_risk": 33.73,
+      "Liquidity": 22.1,
       "Credit": 21.55,
       "Rates": 59.98,
       "Market / Macro": 51.86,
-      "Inflationary Pressure": 50.43,
+      "Inflationary Pressure": null,
       "FX Stress": 6.25,
       "Real Yield": 99.9,
       "Fed Balance Sheet": null
