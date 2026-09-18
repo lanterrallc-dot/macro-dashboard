@@ -28,10 +28,11 @@
   .brand-text h1{font-family:var(--display); font-weight:600; font-size:17px; letter-spacing:0.01em;}
   .brand-text p{font-family:var(--mono); font-size:11px; color:var(--muted-dim); letter-spacing:0.04em; margin-top:1px;}
   .status-cluster{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
-  .pill{font-family:var(--mono); font-size:11px; letter-spacing:0.03em; padding:6px 11px; border-radius:20px; border:1px solid var(--hair); color:var(--muted); display:flex; align-items:center; gap:6px; white-space:nowrap;}
+  .pill{font-family:var(--mono); font-size:11px; letter-spacing:0.03em; padding:6px 11px; border-radius:20px; border:1px solid var(--hair); color:var(--muted); display:flex; align-items:center; gap:6px; white-space:nowrap; max-width:min(70vw,520px); overflow:hidden; text-overflow:ellipsis;}
   .dot{width:6px; height:6px; border-radius:50%; background:var(--muted-dim); flex-shrink:0;}
   .dot.on{background:var(--live); box-shadow:0 0 8px var(--live);}
   .dot.off{background:var(--elevated);}
+  .dot.err{background:var(--highrisk); box-shadow:0 0 8px var(--highrisk);}
   .dot.spin{animation:pulse 1s infinite;}
   @keyframes pulse{0%,100%{opacity:1} 50%{opacity:.3}}
   #refreshBtn{font-family:var(--mono); font-size:11px; letter-spacing:0.03em; padding:7px 14px; border-radius:20px; border:1px solid var(--live); background:rgba(67,198,224,0.08); color:var(--live); cursor:pointer; transition:background .15s ease;}
@@ -48,6 +49,12 @@
   .shell{max-width:1280px; margin:0 auto; padding:0 clamp(16px,4vw,48px);}
   .disclaimer{margin-top:22px; padding:14px 16px; border:1px dashed var(--hair); border-radius:10px; font-size:12.5px; color:var(--muted); line-height:1.6; background:var(--panel-alt);}
   .disclaimer b{color:var(--text); font-weight:600;}
+
+  .errorpanel{display:none; margin-top:18px; border:1px solid rgba(239,91,78,0.4); background:rgba(239,91,78,0.07); border-radius:10px; padding:16px 18px;}
+  .errorpanel h3{font-family:var(--display); font-size:13px; color:var(--highrisk); display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+  .errorpanel h3::before{content:'✕'; font-size:13px;}
+  .errorpanel p{font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:6px;}
+  .errorpanel code{font-family:var(--mono); font-size:11px; background:var(--panel); padding:2px 6px; border-radius:4px; color:var(--highrisk); overflow-wrap:anywhere;}
 
   .bugpanel{margin-top:14px; border:1px solid rgba(224,95,160,0.35); background:rgba(224,95,160,0.06); border-radius:10px; padding:16px 18px;}
   .bugpanel h3{font-family:var(--display); font-size:13px; color:var(--bug); display:flex; align-items:center; gap:8px; margin-bottom:10px;}
@@ -208,6 +215,12 @@
 </div>
 
 <div class="shell">
+
+  <div class="errorpanel" id="errorPanel">
+    <h3 id="errorTitle">Something went wrong loading this page</h3>
+    <p id="errorBody"></p>
+    <p style="color:var(--muted-dim); font-size:11.5px;">This box exists so the page never just sits on "Loading" without saying why. If the message above mentions the data file, check the "Refresh macro model" workflow in the Actions tab.</p>
+  </div>
 
   <div class="hero">
     <div class="gauge-card">
@@ -1541,43 +1554,21 @@ function renderAssetCharts(model){
 // this HTML file and model_output.json are served from the same location.
 const DATA_URL = './model_output.json';
 
+// How long to wait on the data file before giving up. model_output.json carries
+// 22 assets' daily price history and is several MB, so a slow mobile connection
+// needs real headroom here — but not unlimited, or a stalled request leaves the
+// page on "Loading" with no explanation, which is the exact failure this whole
+// error path exists to prevent.
+const FETCH_TIMEOUT_MS = 60000;
+
+// Set by tryLoadDurable so the "last live fetch" readout shows when the SERVER
+// generated the numbers, not when this browser happened to download them.
+let DURABLE_GENERATED_AT = null;
+let DURABLE_ERROR = null;
+
 function adaptJsonModel(json){
   return {
     indicators: json.indicators,
     overallRisk: json.overall_risk,
     effectiveWeight: json.effective_weight,
-    categoryScores: json.category_scores,
-    inflationaryPressure: json.inflationary_pressure,
-    fxStress: json.fx_stress,
-    usdTransmission: json.usd_transmission || null,
-    regime: json.regime,
-    assetOutlook: json.asset_outlook ? {
-      regime: json.asset_outlook.regime,
-      assets: json.asset_outlook.assets.map(a=>({name:a.name, ticker:a.ticker, likelyDirection:a.likely_direction, fxTransmission:a.fx_transmission, interpretation:a.interpretation, directionRank:a.direction_rank})),
-      mostFavored: json.asset_outlook.most_favored,
-      leastFavored: json.asset_outlook.least_favored,
-    } : buildAssetOutlook(json.regime),
-    assetPriceHistory: json.asset_price_history || null,
-    riskHistory: json.risk_history || null,
-    assetRiskMap: json.asset_risk_map || null,
-    priceHistoryNote: json.price_history_note || null,
-    rawSeries: json.raw_series || null,
-    realYields: json.real_yields || null,
-    realYieldsNote: json.real_yields_note || null,
-    commercialPaper: json.commercial_paper || null,
-  };
-}
-
-async function tryLoadDurable(){
-  try{
-    const res = await fetch(DATA_URL + '?v=' + Date.now(), {cache:'no-store'});
-    if(!res.ok) return null;
-    const json = await res.json();
-    if(!json.generated_at) return null;
-    // Guard against a committed-but-empty result (e.g. a run that hit the
-    // refresh script's own safety check but was committed before that
-    // check existed, or any other case where the file has a timestamp but
-    // no real data inside). A timestamp alone isn't enough to trust it —
-    // require at least the headline score to be a real number, otherwise
-    // fall through to the proxy method instead of rendering all dashes.
-    if(json.overall_risk === null || json.overall_ri
+   
