@@ -377,27 +377,10 @@
 </footer>
 
 <script>
-/* ============ failure reporting ============ */
-/* Nothing on this page is allowed to fail silently any more.
- *
- * The bug this replaces: the DOMContentLoaded handler called renderTrendChart()
- * on its first line, then awaited the backtest, then called loadAndRender().
- * renderTrendChart() calls `new Chart(...)`. If the Chart.js CDN was blocked or
- * unreachable, that line threw "Chart is not defined" inside an async function,
- * which surfaces only as an unhandled promise rejection — so the handler stopped
- * dead and loadAndRender() never ran. The visible result was a blank historical
- * chart AND a permanent "Computing…" AND "LAST LIVE FETCH —", with no clue
- * anywhere on screen that anything had gone wrong.
- *
- * Fix is in three parts: load Chart.js from a fallback CDN if the first is
- * blocked; isolate each init step so one failure cannot take the others with
- * it; and surface whatever did fail in the panel above. */
 const PAGE_ERRORS = [];
 
 function reportError(label, err){
   const msg = err && err.message ? err.message : String(err || 'unknown error');
-  // Don't stack duplicates — a failing 15-minute refresh would otherwise grow
-  // the list forever.
   if(PAGE_ERRORS.some(e=>e.label===label && e.msg===msg)) return;
   PAGE_ERRORS.push({label, msg});
   const panel=document.getElementById('errorPanel');
@@ -408,8 +391,6 @@ function reportError(label, err){
   console.error('[dashboard] ' + label, err);
 }
 
-/* Runs fn, reports anything it throws, and keeps going. Returns undefined on
-   failure rather than propagating. */
 function safe(label, fn){
   try{ return fn(); }
   catch(err){ reportError(label, err); return undefined; }
@@ -419,17 +400,9 @@ async function safeAsync(label, fn){
   catch(err){ reportError(label, err); return undefined; }
 }
 
-// Catch anything that escapes the wrappers above, including from event
-// handlers and timers, so it reaches the panel instead of only the console.
 window.addEventListener('error', e=>reportError('Uncaught script error', e.error || e.message));
 window.addEventListener('unhandledrejection', e=>reportError('Unhandled promise rejection', e.reason));
 
-/* ============ charting library ============ */
-/* cdnjs is loaded in <head>. If it was blocked (ad blockers and DNS filters
-   catch it fairly often) fall through to jsDelivr, then unpkg, before giving
-   up. CHARTS_AVAILABLE gates every `new Chart(...)` below, so a total failure
-   costs the charts and nothing else — the scores, tables and regime all still
-   render. */
 let CHARTS_AVAILABLE = false;
 
 const CHART_FALLBACK_CDNS = [
@@ -462,11 +435,6 @@ function fillNoChart(el, msg){
   if(el) el.innerHTML = `<div class="nochart">${msg || CHART_MISSING_NOTE}</div>`;
 }
 
-/* ============ network helpers ============ */
-/* Every fetch on this page now has a deadline. Without one, a request that
-   opens and then stalls never settles, and the await in loadAndRender() hangs
-   forever — leaving the page on "Computing…" with no error, which is the exact
-   failure mode this file is meant to make impossible. */
 async function fetchWithTimeout(url, ms, opts){
   const ctl = new AbortController();
   const timer = setTimeout(()=>ctl.abort(), ms);
@@ -477,10 +445,6 @@ async function fetchWithTimeout(url, ms, opts){
   }
 }
 
-/* Runs an async worker over items with a cap on how many are in flight at
-   once. The proxy path fires 27 requests; sending them all at once through a
-   free public relay is the fastest way to get rate-limited, and the failures
-   come back as opaque errors. Six at a time is slower and far more reliable. */
 async function pool(items, size, worker){
   const out = new Array(items.length);
   let next = 0;
@@ -494,11 +458,8 @@ async function pool(items, size, worker){
   return out;
 }
 
-/* ============ static historical trend (from workbook Dashboard sheet) ============ */
 const HISTORY = [{"date": "2024-09-30", "sp500": 100, "risk": 47.68}, {"date": "2024-10-31", "sp500": 99.01, "risk": 44.48}, {"date": "2024-11-30", "sp500": 104.68, "risk": 44.93}, {"date": "2024-12-31", "sp500": 102.07, "risk": 50.59}, {"date": "2025-01-31", "sp500": 104.83, "risk": 47.99}, {"date": "2025-02-28", "sp500": 103.33, "risk": 45.65}, {"date": "2025-03-31", "sp500": 97.39, "risk": 43.86}, {"date": "2025-04-30", "sp500": 96.64, "risk": 44.88}, {"date": "2025-05-31", "sp500": 102.59, "risk": 38.86}, {"date": "2025-06-30", "sp500": 107.68, "risk": 34.95}, {"date": "2025-07-31", "sp500": 110.01, "risk": 34.72}, {"date": "2025-08-31", "sp500": 112.11, "risk": 42.57}, {"date": "2025-09-30", "sp500": 116.07, "risk": 58.36}, {"date": "2025-10-31", "sp500": 118.7, "risk": 65.08}, {"date": "2025-11-30", "sp500": 118.86, "risk": 54.09}, {"date": "2025-12-31", "sp500": 118.79, "risk": 44.55}, {"date": "2026-01-31", "sp500": 120.42, "risk": 40.73}, {"date": "2026-02-28", "sp500": 119.37, "risk": 40.86}, {"date": "2026-03-31", "sp500": 113.29, "risk": 49.8}, {"date": "2026-04-30", "sp500": 125.1, "risk": 45.33}, {"date": "2026-05-31", "sp500": 131.54, "risk": 44.83}, {"date": "2026-06-30", "sp500": 130.14, "risk": 47.01}, {"date": "2026-07-31", "sp500": 129.97, "risk": 46.55}, {"date": "2026-08-31", "sp500": 134.4, "risk": 51.5}];
 
-/* Plain-English name for each FRED code, so the raw-data table reads as
-   data rather than as tickers. */
 const SERIES_LABEL = {
   'PCETRIM1M158SFRBDAL':'Trimmed-mean PCE, 1-month annualised',
   CPILFESL:'Core CPI, seasonally adjusted', PCEPILFE:'Core PCE price index',
@@ -514,8 +475,6 @@ const SERIES_LABEL = {
   DEXSZUS:'Francs per dollar', DEXUSAL:'Dollars per Australian dollar',
 };
 
-/* Used only on the browser-fallback path — the server feed ships its own
-   formula text alongside each indicator. */
 const FORMULA = {
   'HY Credit Spreads':'Percentile rank of today\u2019s spread within its own trailing 750 observations.',
   'Investment-Grade Spreads':'Percentile rank within its own trailing 750 observations.',
@@ -535,13 +494,11 @@ const FORMULA = {
 };
 
 
-/* ============ helpers ============ */
 const clamp=(x,lo,hi)=>Math.min(hi,Math.max(lo,x));
 function riskColor(s){ if(s===null||s===undefined) return 'var(--muted-dim)'; if(s<25) return 'var(--normal)'; if(s<45) return 'var(--watch)'; if(s<60) return 'var(--elevated)'; if(s<75) return 'var(--highrisk)'; return 'var(--severe)'; }
 function riskBand(s){ if(s===null||s===undefined) return '—'; if(s<25) return 'Normal'; if(s<45) return 'Watch'; if(s<60) return 'Elevated'; if(s<75) return 'High Risk'; return 'Severe Stress'; }
 function num(v,d=2){ return (v===null||v===undefined||isNaN(v)) ? '—' : v.toLocaleString('en-US',{maximumFractionDigits:d}); }
 
-/* ============ FRED fetch layer ============ */
 const SERIES = ['CPILFESL','PCEPILFE','PCETRIM1M158SFRBDAL','ICSA','BAMLH0A0HYM2','BAMLC0A0CM','SOFR','IORB','VIXCLS','DGS2','DGS10','DFII10','T10Y3M','DTWEXBGS','WALCL','WRESBAL','WTREGEN','RRPONTSYD','NFCI','EFFR','SOFR25','SOFR75','DEXJPUS','DEXUSEU','DEXCHUS','DEXSZUS','DEXUSAL'];
 
 const PROXY = url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
@@ -582,11 +539,6 @@ function obs(arr, back){
   return idx>=0 ? arr[idx].value : null;
 }
 
-/* ============ scoring engine ============ */
-/* These two mirror percentile_score() and momentum_percentile_score() in
-   refresh_model.py. The browser path previously used the original workbook's
-   fixed-threshold formulas while the server had moved to percentile scoring,
-   so the two paths disagreed before this. */
 function percentileOf(current, series, window){
   if(current===null||current===undefined||!series||!series.length) return null;
   const pool=series.map(p=>p.value).slice(-window);
@@ -607,7 +559,6 @@ function momentumPercentile(series, window, rocPeriod, invert){
   return +((invert?100-pct:pct).toFixed(2));
 }
 
-/* ============ scoring engine (replicated from workbook formulas) ============ */
 function hyScoreFn(d){
   if(d===null) return null;
   if(d<=250) return 10;
@@ -620,10 +571,6 @@ function hyScoreFn(d){
   return 100;
 }
 
-/* E is the equity-price dict (SPY/RSP). The browser path can't fetch those,
-   so it passes {} and Equity Breadth reports itself unavailable rather than
-   silently scoring null. Previously E wasn't a parameter at all, which threw
-   a ReferenceError the moment the proxy fallback ran. */
 function computeModel(S, E){
   E = E || {};
   const L=id=>obs(S[id],0), P1=id=>obs(S[id],1), P5=id=>obs(S[id],5), P20=id=>obs(S[id],20);
@@ -660,8 +607,6 @@ function computeModel(S, E){
   const dxyScore = dxy!==null ? clamp((dxy-100)*2,0,100) : null;
 
   const walcl=L('WALCL'), wtregen=L('WTREGEN'), wresbal=L('WRESBAL'), rrp=L('RRPONTSYD');
-  // Net liquidity = assets - TGA - reverse repo. Built on WALCL's dates with
-  // the others taken as of each, since the three publish on different days.
   function netLiquiditySeries(){
     const wa=S['WALCL']||[], tg=S['WTREGEN']||[], rr=S['RRPONTSYD']||[];
     const asof=(arr,d)=>{ let last=null; for(const p of arr){ if(p.date<=d) last=p.value; else break; } return last; };
@@ -689,10 +634,6 @@ function computeModel(S, E){
   const cpiCore=L('CPILFESL'), cpiCoreP1=P1('CPILFESL'), pceCore=L('PCEPILFE'), pceCoreP1=P1('PCEPILFE');
   const coreCpiMo = (cpiCore!==null&&cpiCoreP1!==null) ? (cpiCore/cpiCoreP1-1)*100 : null;
   const corePceMo = (pceCore!==null&&pceCoreP1!==null) ? (pceCore/pceCoreP1-1)*100 : null;
-  // Trimmed mean arrives ANNUALISED in percent, not as an index level, so it is
-  // de-annualised before blending. Mirror of compute_model() in
-  // refresh_model.py — the weights must match there or the durable feed and the
-  // in-browser fallback will disagree.
   const trimAnn = L('PCETRIM1M158SFRBDAL');
   const trimMo = trimAnn!==null ? (Math.pow(1+trimAnn/100, 1/12)-1)*100 : null;
   const inflBlend = (coreCpiMo!==null&&corePceMo!==null)
@@ -703,9 +644,7 @@ function computeModel(S, E){
 
   const fedExpScore = (y2Score!==null&&sofrIorbScore!==null) ? 0.6*y2Score+0.4*sofrIorbScore : null;
 
-  // Liquidity Flow Stress is gone: its three inputs are read once, via Fed Net Liquidity.
 
-  // --- equity breadth (needs SPY/RSP, which only the server path fetches) ---
   const spy=E.SPY||[], rsp=E.RSP||[];
   const spyL=obs(spy,0), spyP5=obs(spy,5), spyP20=obs(spy,20);
   const rspL=obs(rsp,0), rspP5=obs(rsp,5), rspP20=obs(rsp,20);
@@ -714,8 +653,6 @@ function computeModel(S, E){
     breadth5D=((rspL/rspP5)/(spyL/spyP5)-1)*100;
   if([spyL,spyP20,rspL,rspP20].every(v=>v!==null)&&spyP20&&rspP20)
     breadth20D=((rspL/rspP20)/(spyL/spyP20)-1)*100;
-  // Merged from the old Breadth and Participation rows, which used these same
-  // two spreads with weights (10,5) and (15,10) and correlated at 0.989.
   const breadthScore = (breadth5D!==null&&breadth20D!==null) ? clamp(50-(breadth5D*12+breadth20D*7),0,100) : null;
 
   const dfii10=L('DFII10');
@@ -735,17 +672,6 @@ function computeModel(S, E){
         chfScore=fxLeg('DEXSZUS',true), audScore=fxLeg('DEXUSAL',true), dxyFxScore=fxLeg('DTWEXBGS',false);
   const fxLegs=[jpyScore,eurScore,cnyScore,chfScore,audScore,dxyFxScore];
 
-  // RESCALED. Each leg is built as 50 + momentum, so a market where nothing
-  // moved scores exactly 50, and only readings ABOVE 50 mean movement in the
-  // stress direction. Averaging the raw legs therefore parked the composite at
-  // ~50 whenever FX was calm — which the shared 0-100 risk colour ramp painted
-  // orange as "Elevated", and which left the regime thresholds unreachable
-  // (hitting 70 needed ~2.7% per day across all six currencies, sustained).
-  //
-  // Instead: take each leg's EXCESS over 50, so a quiet market scores 0 and
-  // legs moving the benign way contribute nothing rather than masking a leg
-  // that is genuinely stressed. Then scale onto the same 0-100 axis the rest
-  // of the dashboard uses. Raise FX_GAIN to make the reading more sensitive.
   const FX_WEIGHTS = {jpy:.30, eur:.15, cny:.20, chf:.10, aud:.10, dxy:.15};
   const FX_GAIN = 5;              // ~1.4%/day across all six sustained -> ~50
   const fxExcess = v => Math.max(0, v - 50);
@@ -755,9 +681,6 @@ function computeModel(S, E){
       FX_WEIGHTS.aud*fxExcess(audScore) + FX_WEIGHTS.dxy*fxExcess(dxyFxScore)
     ), 0, 100);
 
-  // Weighting matches refresh_model.py exactly — see that file's comments for
-  // the full rationale (redundancy removal, Credit reweight, unit fix, and
-  // the Liquidity Flow Stress inclusion fix).
   const indicators=[
     {name:'HY Credit Spreads', category:'Credit', weight:.13, reading:hy, units:'bps', score:hyScore, ids:['BAMLH0A0HYM2']},
     {name:'Investment-Grade Spreads', category:'Credit', weight:.07, reading:ig, units:'bps', score:igScore, ids:['BAMLC0A0CM']},
@@ -803,9 +726,6 @@ function computeModel(S, E){
   const inflationaryPressure = (categoryScores['Rates']!==null&&fedExpScore!==null&&dxyScore!==null)
     ? clamp(0.45*categoryScores['Rates']+0.3*fedExpScore+0.25*dxyScore,0,100) : null;
 
-  // FX thresholds rebased for the rescaled composite above. The old values
-  // (45/55/65/70) were written for a scale centred on 50; on a scale where
-  // calm is 0 they would mean "never trigger" and "always calm" respectively.
   const FX_CRISIS = 55, FX_STRESS = 50, FX_CONTAINED = 35, FX_CALM = 20;
 
   let regime='Insufficient data';
@@ -819,8 +739,6 @@ function computeModel(S, E){
     else regime='General Tightening';
   }
 
-  // Same shape the server feed emits, so the raw-data table and the
-  // expandable rows work identically on either path.
   const rawSeries={};
   for(const id of SERIES){
     const arr=S[id];
@@ -835,22 +753,17 @@ function computeModel(S, E){
   }
   indicators.forEach(i=>{
     if(FORMULA[i.name]) i.formula=FORMULA[i.name];
-    // no derived intermediates on this path — show the source observations
     if(i.ids && i.ids.length) i.inputs=i.ids.map(id=>({
       label: SERIES_LABEL[id]||id, series:id,
       value: rawSeries[id]?rawSeries[id].latest:null,
       date: rawSeries[id]?rawSeries[id].date:null }));
   });
 
-  // Same measure the server computes; recomputed here so the in-browser
-  // fallback path does not silently lose it. See usd_transmission() in
-  // refresh_model.py — keep the bands in step.
   const usdTransmission = usdTransmissionFrom(S);
   return {indicators, overallRisk, effectiveWeight, categoryScores, inflationaryPressure, fxStress, usdTransmission, regime, notes,
     rawSeries, assetOutlook: buildAssetOutlook(regime)};
 }
 
-/* ============ asset-class outlook (from workbook "Asset Outlook" sheet) ============ */
 const ASSET_TABLE = [
   ['S&P 500','SPY','UP','MIXED','DOWN','DOWN','DOWN','JPY carry unwind','Strong yen can pressure leveraged/global risk assets'],
   ['Nasdaq / Growth','QQQ','UP','MIXED','DOWN STRONG','DOWN','DOWN','USD funding','Broad USD strength can tighten global liquidity'],
@@ -878,11 +791,6 @@ const ASSET_TABLE = [
 const DIRECTION_RANK = {'UP STRONG':2,'UP':1,'UP / MIXED':.5,'MIXED / UP':.5,'UP after liquidation':.5,'UP initially':.5,'RELATIVE UP':.5,'MIXED':0,'MIXED / DOWN':-.5,'DOWN / MIXED':-.5,'DOWN initially':-.5,'DOWN':-1,'DOWN STRONG':-2};
 const REGIME_COL = {'Liquidity Expansion':0,'Neutral / Balanced':1,'Inflationary Tightening':2,'Funding / Credit Stress':3,'General Tightening':3,'Deflationary / Funding Crisis':4};
 
-// Correlation of DAILY CHANGES in the real 10-year yield and the broad dollar.
-// Positive: yields and the dollar move together, the growth/Fed channel every
-// USD-routed rationale in the asset table assumes. Negative: they move against
-// each other, the risk-premium channel, and those rationales do not hold.
-// Mirror of usd_transmission() in refresh_model.py — change both together.
 function usdTransmissionFrom(S){
   const dfii = S['DFII10']||[], dxy = S['DTWEXBGS']||[];
   if(!dfii.length || !dxy.length) return null;
@@ -906,11 +814,6 @@ function usdTransmissionFrom(S){
   const [r120] = corrOver(120);
   if(r60===null) return null;
 
-  // BOTH windows must agree before a state is declared. A 60-day reading near
-  // the threshold crosses it on a few days of new data, and letting that alone
-  // flip the table's calls on and off would be noisier than the thing being
-  // measured. Unconfirmed falls through to 'decoupled', which withholds the
-  // dollar-routed calls — the conservative direction to fail in.
   const confirmed = r120 !== null;
   const up   = confirmed ? (r60 >= 0.2 && r120 >= 0.2) : (r60 >= 0.2);
   const down = confirmed ? (r60 <= -0.2 && r120 <= -0.2) : (r60 <= -0.2);
@@ -944,7 +847,6 @@ function buildAssetOutlook(regime){
   };
 }
 
-/* ============ gauge ============ */
 function drawGauge(score){
   const canvas=document.getElementById('gaugeCanvas'); const ctx=canvas.getContext('2d');
   const W=canvas.width,H=canvas.height; ctx.clearRect(0,0,W,H);
@@ -961,9 +863,6 @@ function drawGauge(score){
   ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2); ctx.fillStyle='#e7ecf3'; ctx.fill();
 }
 
-/* ============ trend chart (static) ============ */
-// The gauge above is hand-drawn on a raw canvas and needs no library, so it
-// keeps working even when this does not.
 function renderTrendChart(){
   const wrap=document.getElementById('trendChartWrap');
   if(!CHARTS_AVAILABLE){ fillNoChart(wrap); return; }
@@ -979,7 +878,6 @@ function renderTrendChart(){
     }}});
 }
 
-/* ============ render model output ============ */
 function renderModel(model){
   drawGauge(model.overallRisk);
   const col=riskColor(model.overallRisk);
@@ -987,7 +885,6 @@ function renderModel(model){
   document.getElementById('gaugeNum').style.color=col;
   document.getElementById('gaugeBand').textContent=riskBand(model.overallRisk);
   document.getElementById('gaugeBand').style.color=col;
-  // Guarded: a feed missing effective_weight used to print "NaN% of 92%".
   document.getElementById('effectiveWeightNote').textContent =
     (typeof model.effectiveWeight === 'number' && !isNaN(model.effectiveWeight))
       ? `effective weight used: ${(model.effectiveWeight*100).toFixed(0)}% of 92% intended (excl. Liquidity Flow Stress by design)`
@@ -1007,8 +904,6 @@ function renderModel(model){
 
   const grid=document.getElementById('subscoreGrid'); grid.innerHTML='';
   const catColor = {'Liquidity':'var(--elevated)','Credit':'var(--normal)','Rates':'var(--watch)','Market / Macro':'var(--watch)'};
-  // `|| {}` so a feed without category_scores degrades to an empty grid
-  // instead of throwing on Object.entries(undefined) and killing the render.
   Object.entries(model.categoryScores || {}).forEach(([cat,score])=>{
     const c = score!==null ? riskColor(score) : 'var(--muted-dim)';
     const div=document.createElement('div'); div.className='subscore'; div.style.position='relative';
@@ -1080,8 +975,6 @@ function renderModel(model){
     });
   });
 
-  // Each panel below is independent of the others, so one bad payload section
-  // no longer blanks the whole page.
   safe('Raw data table', ()=>renderRawSeries(model.rawSeries));
   safe('Real yield panel', ()=>renderRealYields(model.realYields, model.realYieldsNote));
   const liveCount = all.filter(i=>!i.unavailable && i.score!==null).length;
@@ -1127,10 +1020,6 @@ function renderRealYields(rows, note){
   drawRealYieldScatter(rows.filter(r=>r.code!=='US' && r.fx_60d!==null && r.fx_60d!==undefined && r.real_diff_vs_us!==null));
 }
 
-/* Differential on x, actual currency move on y. A currency sitting well below
-   the fitted line has moved weaker than its rate differential alone accounts
-   for \u2014 that residual is the risk premium the market is charging it. With
-   only a handful of points the line is indicative, not a regression to lean on. */
 function drawRealYieldScatter(pts){
   const svg=document.getElementById('ryScatter');
   const W=700,H=300,L=52,R=16,T=16,B=44;
@@ -1186,9 +1075,6 @@ function renderRawSeries(raw){
     const r=raw[id];
     if(!r||r.latest===null) return `<tr class="excluded"><td class="ind-name">${id}</td><td class="col-optional" style="color:var(--muted-dim)">${SERIES_LABEL[id]||''}</td><td colspan="6" style="color:var(--highrisk);font-family:var(--mono);font-size:11.5px;">no data returned</td></tr>`;
     live++;
-    // A series is only as current as its own release schedule: CPI is monthly,
-    // reserves weekly, yields daily. Flag anything over 45 days as visibly old
-    // rather than pretending every row is equally fresh.
     const ageDays=Math.round((today-new Date(r.date+'T00:00:00Z'))/86400000);
     const old=ageDays>45; if(old) stale++;
     return `<tr>
@@ -1217,12 +1103,6 @@ async function tryLoadBacktest(){
   }catch(e){ return null; }
 }
 
-// Fewest regime episodes an asset needs before its hit rate is worth printing.
-// Most rows run n=6; at that size the 95% interval on 1-of-6 runs roughly
-// 0.4%-64% and on 5-of-6 roughly 36%-100%, overlapping almost entirely, so the
-// figures cannot be told apart from each other or from chance. Module scope
-// because renderAssetOutlook uses it in the banner before the row loop.
-// Raise this if the backtest window lengthens.
 const MIN_REPORTABLE_N = 20;
 
 function renderAssetOutlook(outlook, usdT){
@@ -1272,25 +1152,12 @@ function renderAssetOutlook(outlook, usdT){
     banner.innerHTML = `<b style="color:var(--watch)">Not yet backtested</b> — these are regime-conditioned historical tendencies transcribed from the source workbook, not verified against real returns. Run the <code style="background:var(--panel); padding:1px 5px; border-radius:4px;">backtest</code> workflow from the Actions tab to fill this in.`;
   }
 
-  // Most rows in ASSET_TABLE justify their direction through the dollar
-  // ("USD funding", "USD inverse", "Strong USD can..."). Those rationales are
-  // only valid while yields and the dollar actually move together. When the
-  // measured channel is decoupled or inverted, the honest call is no call:
-  // withdraw the direction rather than print one whose premise has failed.
-  // The U.S. Dollar row is exempt — it IS the dollar, not a transmission from it.
-  //
-  // Declared as a function, not a const arrow: the channel note below calls it
-  // ABOVE this point, and a const would still be in the temporal dead zone
-  // there, throwing a ReferenceError that killed the whole section. Function
-  // declarations hoist, so the early call works.
   const channelBroken = !!usdT && usdT.state !== 'intact';
   function routesThroughUSD(a){
     return a.name !== 'U.S. Dollar' &&
       /usd|dollar/i.test((a.fxTransmission||'') + ' ' + (a.interpretation||''));
   }
 
-  // State the channel plainly before the table, since it now determines which
-  // rows carry a direction at all.
   const chanEl = document.getElementById('usdChannelNote');
   if(chanEl){
     if(!usdT){
@@ -1325,16 +1192,10 @@ function renderAssetOutlook(outlook, usdT){
     if(bt && newAssetStats && newAssetStats[a.name]){
       const stat = newAssetStats[a.name];
       if(stat.hit_rate!==null && (stat.total||0) < MIN_REPORTABLE_N){
-        // Below this many episodes the confidence interval spans most of the
-        // 0-100 range, so 17% and 83% are not distinguishable from each other
-        // or from chance. Printing them invites reading noise as evidence, so
-        // the direction (a prior from the workbook) stays and the number goes.
         accCell = `<td class="mono-val col-narrow" style="color:var(--muted-dim)">n/a`
           + `<div style="color:var(--muted-dim); font-size:10px; font-weight:400;">`
           + `sample too small · n=${stat.total||0}</div></td>`;
       } else if(stat.hit_rate!==null){
-        // Edge over the asset's own base rate is the honest number; the raw
-        // hit rate on its own flatters anything with an upward drift.
         const edge = stat.edge;
         const survives = stat.significant_after_correction;
         const eCol = survives ? 'var(--normal)'
@@ -1366,12 +1227,8 @@ function renderAssetOutlook(outlook, usdT){
   });
 }
 
-/* ============ per-asset price-vs-score charts ============ */
 let assetChartInstances = [];
 
-// Same asset -> risk-category mapping as refresh_model.py's ASSET_RISK_MAP,
-// used only in the browser-proxy fallback path (the durable path gets this
-// from the JSON directly, since Python is the single source of truth there).
 const ASSET_RISK_MAP_JS = {
   'S&P 500':'Market / Macro','Nasdaq / Growth':'Liquidity','Small Caps':'Liquidity',
   'Value Stocks':'Market / Macro','High Dividend Stocks':'Market / Macro',
@@ -1388,17 +1245,8 @@ const RISK_METRIC_COLOR = {
   'Inflationary Pressure':'#c084fc','FX Stress':'#43c6e0','overall_risk':'#e8b93f',
   'Fed Balance Sheet':'#43c6e0','Real Yield':'#c084fc',
 };
-// The one pairing above with a real, out-of-sample-validated relationship
-// (not just an editorial grouping) — see derive_asset_signals.py.
 const VALIDATED_PAIRINGS = new Set(['Short Treasuries / T-Bills']);
 
-/** Forward-fills a sparse {date, value} series onto a dense array of target
- * dates — carries the last known value forward until a newer one arrives.
- * This is what actually fixes the chart: instead of trying to plot ~60
- * sparse risk-score dates against ~180 dense daily price dates on a shared
- * category axis (where most points silently fail to land on a matching
- * category and render as noise), both datasets end up the same length,
- * indexed identically, so Chart.js can't misalign them. */
 function forwardFillToDates(sparsePoints, targetDates, key){
   const sorted = [...sparsePoints].sort((a,b)=> a.date < b.date ? -1 : 1);
   let i = 0, last = null;
@@ -1445,13 +1293,8 @@ function renderAssetCharts(model){
     const metricLabel = metric === 'overall_risk' ? 'Overall Risk' : metric;
     const priceDates = priceSeries.map(p=>p.date);
     const alignedRiskValues = forwardFillToDates(riskHist, priceDates, metric);
-    // Renamed from riskColor: a const of that name here shadowed the global
-    // riskColor() function for the whole callback, so any future use of the
-    // function inside this loop would have thrown on the temporal dead zone.
     const metricColor = RISK_METRIC_COLOR[metric] || '#e8b93f';
 
-    // actual numeric readout — current value plus the range over the shown
-    // window — printed directly on the card, not just discoverable on hover
     const validRisk = alignedRiskValues.filter(v=>v!==null && v!==undefined);
     let riskReadout = 'no data this window';
     if(validRisk.length){
@@ -1513,20 +1356,10 @@ function renderAssetCharts(model){
 }
 
 
-/* ============ durable data source (server-refreshed JSON) ============ */
-// Point this at wherever refresh_model.py's output is hosted — e.g. a GitHub Pages
-// URL for the repo the accompanying workflow commits to. Relative path works if
-// this HTML file and model_output.json are served from the same location.
 const DATA_URL = './model_output.json';
 
-// How long to wait on the data file before giving up. model_output.json carries
-// 22 assets' daily price history and can be several MB, so a slow connection
-// needs real headroom — but not unlimited, or a stalled request leaves the page
-// on "Loading" with no explanation, which is exactly the failure this file is
-// built to prevent.
 const DURABLE_TIMEOUT_MS = 60000;
 
-// Why the durable feed was not used, in plain words, for the status pill.
 let DURABLE_ERROR = null;
 
 function adaptJsonModel(json){
@@ -1570,12 +1403,6 @@ async function tryLoadDurable(){
       DURABLE_ERROR = 'model_output.json has no generated_at timestamp';
       return null;
     }
-    // Guard against a committed-but-empty result (e.g. a run that hit the
-    // refresh script's own safety check but was committed before that
-    // check existed, or any other case where the file has a timestamp but
-    // no real data inside). A timestamp alone isn't enough to trust it —
-    // require at least the headline score to be a real number, otherwise
-    // fall through to the proxy method instead of rendering all dashes.
     if(json.overall_risk === null || json.overall_risk === undefined){
       DURABLE_ERROR = 'model_output.json has a timestamp but no overall_risk value';
       return null;
@@ -1589,7 +1416,6 @@ async function tryLoadDurable(){
   }
 }
 
-/* ============ orchestration ============ */
 async function loadLiveViaProxy(){
   const S={};
   const failures=[];
@@ -1618,3 +1444,63 @@ async function loadAndRender(){
     if(durable){
       const model = adaptJsonModel(durable);
       renderModel(model);
+      const genAt = new Date(durable.generated_at);
+      const ageMin = (Date.now()-genAt.getTime())/60000;
+      document.getElementById('asofTime').textContent = genAt.toLocaleString();
+      document.getElementById('footerClock').textContent = 'Server refresh: '+genAt.toLocaleString();
+      if(ageMin<=20){
+        dot.className='dot on';
+        status.textContent = `Durable feed — refreshed ${ageMin.toFixed(0)}m ago`;
+      } else {
+        dot.className='dot off';
+        status.textContent = `Durable feed stale — last refresh ${ageMin.toFixed(0)}m ago (check the scheduled job)`;
+      }
+      return;
+    }
+
+    status.textContent = `${DURABLE_ERROR || 'No server feed found'} — falling back to browser proxy fetch…`;
+    const {model, successCount, total, failures} = await loadLiveViaProxy();
+    renderModel(model);
+    const now=new Date();
+    document.getElementById('asofTime').textContent = now.toLocaleString();
+    document.getElementById('footerClock').textContent = 'Last proxy fetch: '+now.toLocaleString();
+    if(successCount===total){
+      dot.className='dot on';
+      status.textContent = `Fallback (proxy) — ${successCount}/${total} series OK · set up the server refresh for a durable feed`;
+    } else if(successCount>0){
+      dot.className='dot off';
+      status.textContent = `Fallback (proxy, partial) — ${successCount}/${total} series OK`;
+      reportError('Some FRED series did not load through the proxy',
+        new Error(failures.slice(0,6).join(' · ') + (failures.length>6 ? ` · and ${failures.length-6} more` : '')));
+    } else {
+      dot.className='dot err';
+      status.textContent = 'No data source reachable — neither the server feed nor the proxy responded';
+      reportError('No data source reachable',
+        new Error((DURABLE_ERROR || 'server feed unavailable') + '; proxy: ' + (failures[0] || 'no response')));
+      document.getElementById('regimeName').textContent = 'No data';
+      document.getElementById('regimeDesc').textContent =
+        'Neither the server-refreshed file nor the live proxy returned anything this attempt. Details are in the panel at the top of the page.';
+    }
+  } catch(err){
+    dot.className='dot err';
+    status.textContent = 'Refresh failed — see the panel at the top of the page';
+    document.getElementById('regimeName').textContent = 'Refresh failed';
+    document.getElementById('regimeDesc').textContent = 'Something went wrong while loading or rendering this refresh.';
+    reportError('Refresh failed', err);
+  } finally {
+    btn.disabled=false; btn.textContent='↻ Refresh now';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  CHARTS_AVAILABLE = await safeAsync('Chart library', ()=>chartReady) === true;
+  if(!CHARTS_AVAILABLE) reportError('Chart library', new Error(CHART_MISSING_NOTE));
+
+  safe('Historical trend chart', renderTrendChart);
+  BACKTEST_DATA = await safeAsync('Backtest file', tryLoadBacktest) || null;
+  await safeAsync('Initial data load', loadAndRender);
+  setInterval(()=>{ safeAsync('Scheduled refresh', loadAndRender); }, 15*60*1000);
+});
+</script>
+</body>
+</html>
