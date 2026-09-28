@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T07:05:11.233197+00:00",
+  "generated_at": "2026-09-28T07:06:25.042476+00:00",
   "regime_history": [
     {
       "date": "2018-01-31",
@@ -348,7 +348,7 @@
     },
     {
       "date": "2023-10-31",
-      "regime_new": "General Tightening",
+      "regime_new": null,
       "regime_old": "Neutral / Balanced"
     },
     {
@@ -511,113 +511,109 @@
     "per_asset": {
       "S&P 500": {
         "hits": 3,
-        "total": 11,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 3,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 3,
+            "total": 9
           }
         },
-        "hit_rate": 0.273
+        "hit_rate": 0.3
       },
       "Nasdaq / Growth": {
         "hits": 5,
-        "total": 11,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 5,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 5,
+            "total": 9
           }
         },
-        "hit_rate": 0.455
+        "hit_rate": 0.5
       },
       "Small Caps": {
         "hits": 3,
-        "total": 11,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 3,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 3,
+            "total": 9
           }
         },
-        "hit_rate": 0.273
+        "hit_rate": 0.3
       },
       "Value Stocks": {
         "hits": 1,
-        "total": 11,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 1,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
-          }
-        },
-        "hit_rate": 0.091
-      },
-      "High Dividend Stocks": {
-        "hits": 1,
-        "total": 10,
-        "by_regime": {
+          },
           "General Tightening": {
             "hits": 1,
-            "total": 10
+            "total": 9
           }
         },
         "hit_rate": 0.1
       },
-      "High-Yield Bonds": {
-        "hits": 2,
-        "total": 11,
+      "High Dividend Stocks": {
+        "hits": 1,
+        "total": 9,
         "by_regime": {
           "General Tightening": {
-            "hits": 2,
-            "total": 10
-          },
+            "hits": 1,
+            "total": 9
+          }
+        },
+        "hit_rate": 0.111
+      },
+      "High-Yield Bonds": {
+        "hits": 2,
+        "total": 10,
+        "by_regime": {
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 2,
+            "total": 9
           }
         },
-        "hit_rate": 0.182
+        "hit_rate": 0.2
       },
       "Investment-Grade Bonds": {
         "hits": 4,
-        "total": 11,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 4,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 4,
+            "total": 9
           }
         },
-        "hit_rate": 0.364
+        "hit_rate": 0.4
       },
       "Short Treasuries / T-Bills": {
-        "hits": 32,
-        "total": 32,
+        "hits": 31,
+        "total": 31,
         "by_regime": {
-          "General Tightening": {
-            "hits": 10,
-            "total": 10
-          },
           "Neutral / Balanced": {
             "hits": 21,
             "total": 21
@@ -625,110 +621,114 @@
           "Inflationary Tightening": {
             "hits": 1,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 9,
+            "total": 9
           }
         },
         "hit_rate": 1.0
       },
       "Long Treasuries": {
-        "hits": 4,
-        "total": 11,
+        "hits": 3,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 4,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 3,
+            "total": 9
           }
         },
-        "hit_rate": 0.364
+        "hit_rate": 0.3
       },
       "U.S. Dollar": {
         "hits": 5,
-        "total": 11,
-        "by_regime": {
-          "General Tightening": {
-            "hits": 5,
-            "total": 10
-          },
-          "Inflationary Tightening": {
-            "hits": 0,
-            "total": 1
-          }
-        },
-        "hit_rate": 0.455
-      },
-      "Gold": {
-        "hits": 8,
         "total": 10,
         "by_regime": {
+          "Inflationary Tightening": {
+            "hits": 0,
+            "total": 1
+          },
           "General Tightening": {
-            "hits": 8,
-            "total": 10
+            "hits": 5,
+            "total": 9
           }
         },
-        "hit_rate": 0.8
+        "hit_rate": 0.5
+      },
+      "Gold": {
+        "hits": 7,
+        "total": 9,
+        "by_regime": {
+          "General Tightening": {
+            "hits": 7,
+            "total": 9
+          }
+        },
+        "hit_rate": 0.778
       },
       "Silver": {
-        "hits": 4,
-        "total": 11,
+        "hits": 3,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 4,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 3,
+            "total": 9
           }
         },
-        "hit_rate": 0.364
+        "hit_rate": 0.3
       },
       "Broad Commodities": {
-        "hits": 4,
-        "total": 11,
+        "hits": 3,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 4,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 3,
+            "total": 9
           }
         },
-        "hit_rate": 0.364
+        "hit_rate": 0.3
       },
       "Oil": {
-        "hits": 6,
-        "total": 11,
+        "hits": 5,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 6,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 5,
+            "total": 9
           }
         },
-        "hit_rate": 0.545
+        "hit_rate": 0.5
       },
       "REITs": {
         "hits": 3,
-        "total": 11,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 3,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 3,
+            "total": 9
           }
         },
-        "hit_rate": 0.273
+        "hit_rate": 0.3
       },
       "Utilities": {
         "hits": 0,
@@ -742,91 +742,91 @@
         "hit_rate": 0.0
       },
       "Consumer Staples": {
-        "hits": 8,
-        "total": 10,
+        "hits": 7,
+        "total": 9,
         "by_regime": {
           "General Tightening": {
-            "hits": 8,
-            "total": 10
+            "hits": 7,
+            "total": 9
           }
         },
-        "hit_rate": 0.8
+        "hit_rate": 0.778
       },
       "Financials": {
         "hits": 2,
-        "total": 10,
+        "total": 9,
         "by_regime": {
           "General Tightening": {
             "hits": 2,
-            "total": 10
+            "total": 9
+          }
+        },
+        "hit_rate": 0.222
+      },
+      "Bitcoin": {
+        "hits": 6,
+        "total": 10,
+        "by_regime": {
+          "Inflationary Tightening": {
+            "hits": 0,
+            "total": 1
+          },
+          "General Tightening": {
+            "hits": 6,
+            "total": 9
+          }
+        },
+        "hit_rate": 0.6
+      },
+      "Crypto ex-BTC": {
+        "hits": 7,
+        "total": 10,
+        "by_regime": {
+          "Inflationary Tightening": {
+            "hits": 0,
+            "total": 1
+          },
+          "General Tightening": {
+            "hits": 7,
+            "total": 9
+          }
+        },
+        "hit_rate": 0.7
+      },
+      "Emerging-Market Stocks": {
+        "hits": 2,
+        "total": 10,
+        "by_regime": {
+          "Inflationary Tightening": {
+            "hits": 0,
+            "total": 1
+          },
+          "General Tightening": {
+            "hits": 2,
+            "total": 9
           }
         },
         "hit_rate": 0.2
       },
-      "Bitcoin": {
-        "hits": 6,
-        "total": 11,
-        "by_regime": {
-          "General Tightening": {
-            "hits": 6,
-            "total": 10
-          },
-          "Inflationary Tightening": {
-            "hits": 0,
-            "total": 1
-          }
-        },
-        "hit_rate": 0.545
-      },
-      "Crypto ex-BTC": {
-        "hits": 7,
-        "total": 11,
-        "by_regime": {
-          "General Tightening": {
-            "hits": 7,
-            "total": 10
-          },
-          "Inflationary Tightening": {
-            "hits": 0,
-            "total": 1
-          }
-        },
-        "hit_rate": 0.636
-      },
-      "Emerging-Market Stocks": {
-        "hits": 2,
-        "total": 11,
-        "by_regime": {
-          "General Tightening": {
-            "hits": 2,
-            "total": 10
-          },
-          "Inflationary Tightening": {
-            "hits": 0,
-            "total": 1
-          }
-        },
-        "hit_rate": 0.182
-      },
       "Emerging-Market Bonds": {
         "hits": 2,
-        "total": 11,
+        "total": 10,
         "by_regime": {
-          "General Tightening": {
-            "hits": 2,
-            "total": 10
-          },
           "Inflationary Tightening": {
             "hits": 0,
             "total": 1
+          },
+          "General Tightening": {
+            "hits": 2,
+            "total": 9
           }
         },
-        "hit_rate": 0.182
+        "hit_rate": 0.2
       }
     },
-    "overall_hit_rate": 0.45,
-    "hits": 112,
-    "total": 249
+    "overall_hit_rate": 0.461,
+    "hits": 105,
+    "total": 228
   },
   "old_model": {
     "per_asset": {
