@@ -29,6 +29,7 @@ OUT = os.environ.get("BTC_OUTPUT", "btc_output.json")
 
 UA = {"User-Agent": "Mozilla/5.0 (macro-dashboard btc refresh)", "Accept": "*/*"}
 TODAY = dt.date.today()
+NOW_STAMP = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 START = (TODAY - dt.timedelta(days=3 * 365)).isoformat()
 
 
@@ -149,11 +150,49 @@ def unavailable(id_, name, reason, trigger="", source=""):
     return indicator(id_, name, status="na", display="Unavailable", detail=reason, trigger=trigger, source=source)
 
 
+PREV = {}  # last good indicators from the previous btc_output.json, keyed by id
+PREV_CORR = None
+
+
+def load_previous():
+    global PREV_CORR
+    try:
+        with open(OUT, encoding="utf-8") as fh:
+            old = json.load(fh)
+    except Exception:  # noqa: BLE001
+        return
+    for g in old.get("groups", []):
+        for i in g.get("indicators", []):
+            if i.get("status") != "na":
+                PREV[i["id"]] = i
+    PREV_CORR = old.get("correlation")
+
+
+def stale_note(asof):
+    try:
+        then = dt.datetime.strptime(asof, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+        hrs = (dt.datetime.now(dt.timezone.utc) - then).total_seconds() / 3600
+        age = f"{hrs:.0f}h" if hrs < 48 else f"{hrs / 24:.0f} days"
+        return f"⚠ Source failed this run; showing last good reading from {age} ago. "
+    except Exception:  # noqa: BLE001
+        return "⚠ Source failed this run; showing last good reading. "
+
+
 def guarded(fn, id_, name, trigger, source):
     try:
-        return fn()
+        res = fn()
+        if res.get("status") != "na":
+            res["asof_utc"] = NOW_STAMP
+            res["detail_fresh"] = res["detail"]
+        return res
     except Exception as e:  # noqa: BLE001
         print(f"[warn] {id_}: {type(e).__name__}: {e}")
+        old = PREV.get(id_)
+        if old:
+            keep = dict(old)
+            keep["detail"] = stale_note(old.get("asof_utc", "")) + old.get("detail_fresh", old["detail"])
+            keep["stale"] = True
+            return keep
         return unavailable(id_, name, f"Data source failed this run ({type(e).__name__}).", trigger, source)
 
 
@@ -567,6 +606,7 @@ def build_correlation(ctx):
 
 # ----------------------------------------------------------------- main
 def main():
+    load_previous()
     ctx = {}
     try:
         ctx["btc_price"] = btc_price_daily()
@@ -615,6 +655,17 @@ def main():
     except Exception as e:  # noqa: BLE001
         print(f"[warn] correlation: {e}")
         corr = None
+    if corr is None and PREV_CORR:
+        corr = dict(PREV_CORR)
+        corr["note"] = "⚠ Data failed this run; showing last good reading. " + corr.get("note_fresh", corr["note"])
+    elif corr is not None:
+        corr["note_fresh"] = corr["note"]
+
+    # Nothing at all came back (e.g. this runner had no network): keep the old file untouched.
+    fresh = [i for g in groups for i in g["indicators"] if i["status"] != "na" and not i.get("stale")]
+    if not fresh and PREV:
+        print("ERROR: every source failed this run; leaving the previous btc_output.json in place.")
+        raise SystemExit(0)
 
     scored = [i for g in groups for i in g["indicators"] if i["status"] != "na"]
     n_good = sum(i["status"] == "good" for i in scored)
