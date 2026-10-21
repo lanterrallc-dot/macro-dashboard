@@ -9,7 +9,8 @@ rest of the page still refreshes.
 Secrets (repo Settings -> Secrets and variables -> Actions):
   FRED_API_KEY          required  (already set up for the macro dashboard)
   CRYPTOQUANT_API_KEY   optional  enables Exchange Whale Ratio + Estimated Leverage Ratio
-  GLASSNODE_API_KEY     optional  enables Long-Term Holder Net Position Change
+  GLASSNODE_API_KEY     optional  exact Long-Term Holder Net Position Change
+                                  (without it, the free LTH-SOPR feed from bitcoin-data.com stands in)
 """
 import bisect
 import datetime as dt
@@ -34,16 +35,27 @@ START = (TODAY - dt.timedelta(days=3 * 365)).isoformat()
 
 
 # ----------------------------------------------------------------- helpers
+class BadResponse(RuntimeError):
+    """The source answered, but with something other than data (maintenance page, block page...)."""
+
+
 def http(url, headers=None, tries=3, as_json=True):
     h = dict(UA)
     h.update(headers or {})
     last = None
+    host = urllib.parse.urlparse(url).netloc
     for i in range(tries):
         try:
             req = urllib.request.Request(url, headers=h)
             with urllib.request.urlopen(req, timeout=30) as r:
                 body = r.read().decode("utf-8", "replace")
-            return json.loads(body) if as_json else body
+            if not as_json:
+                return body
+            try:
+                return json.loads(body)
+            except ValueError:
+                snippet = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", body)).strip()[:120]
+                raise BadResponse(f"{host} sent a non-data page (likely down for maintenance): '{snippet}'") from None
         except Exception as e:  # noqa: BLE001
             last = e
             time.sleep(2 * (i + 1))
@@ -181,6 +193,8 @@ def stale_note(asof):
 def guarded(fn, id_, name, trigger, source):
     try:
         res = fn()
+        if res.pop("_keep_asof", False):
+            return res
         if res.get("status") != "na":
             res["asof_utc"] = NOW_STAMP
             res["detail_fresh"] = res["detail"]
@@ -193,7 +207,11 @@ def guarded(fn, id_, name, trigger, source):
             keep["detail"] = stale_note(old.get("asof_utc", "")) + old.get("detail_fresh", old["detail"])
             keep["stale"] = True
             return keep
-        return unavailable(id_, name, f"Data source failed this run ({type(e).__name__}).", trigger, source)
+        if isinstance(e, BadResponse):
+            why = f"{source} is returning a maintenance/error page instead of data. Fills in automatically once it's back."
+        else:
+            why = f"Data source failed this run ({type(e).__name__})."
+        return unavailable(id_, name, why, trigger, source)
 
 
 # ----------------------------------------------------------------- FRED
@@ -343,6 +361,9 @@ def build_etf_flows(ctx):
     s = parse_farside(html)
     if len(s) < 10:
         raise RuntimeError("could not parse flow table")
+    # Farside shows 0.0 for today until the funds report after the US close; drop that placeholder.
+    while len(s) > 10 and s.vals[-1] == 0 and s.last_date >= TODAY - dt.timedelta(days=1):
+        s = Series(list(zip(s.dates[:-1], s.vals[:-1])))
     last5 = s.vals[-5:]
     avg5 = sum(last5) / 5
     if all(v > 0 for v in last5) and avg5 >= 200:
@@ -409,11 +430,47 @@ def cq(path):
     return Series(pts)
 
 
+def build_lth_sopr(ctx):
+    """Free proxy: Long-Term Holder SOPR (bitcoin-data.com, no key, 15 calls/day, ~7-day delay).
+    LTH-SOPR > 1 means long-term holders are selling at a profit (distribution); at or below 1
+    their profit-taking has dried up."""
+    old = PREV.get("lth")
+    if old and not old.get("stale") and old.get("source", "").startswith("bitcoin-data.com"):
+        try:  # free tier is 15 calls/day, so only re-fetch every 6 hours
+            then = dt.datetime.strptime(old["asof_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+            if dt.datetime.now(dt.timezone.utc) - then < dt.timedelta(hours=6):
+                keep = dict(old)
+                keep["_keep_asof"] = True
+                return keep
+        except Exception:  # noqa: BLE001
+            pass
+    start = (TODAY - dt.timedelta(days=365)).isoformat()
+    j = http(f"https://bitcoin-data.com/v1/lth-sopr?startday={start}")
+    s = Series([(d(r["d"]), float(r["lthSopr"])) for r in j if r.get("lthSopr") is not None])
+    if len(s) < 30:
+        raise RuntimeError("too little LTH-SOPR history")
+    avg7 = sum(s.vals[-7:]) / 7
+    prev7 = sum(s.vals[-14:-7]) / 7
+    if avg7 <= 1.0:
+        status = "good"
+    elif avg7 <= 1.05 or avg7 < prev7:
+        status = "warn"
+    else:
+        status = "bad"
+    word = "not selling at a profit" if avg7 <= 1.0 else "still taking profits"
+    return indicator(
+        "lth", "Long-Term Holder Selling (LTH-SOPR)",
+        status=status, display=f"{avg7:.3f}",
+        detail=f"7-day avg, data through {s.last_date:%b %d} (free feed runs ~1 week behind). Long-term holders are {word}; prior week {prev7:.3f}. "
+               "Free stand-in for LTH Net Position Change; add GLASSNODE_API_KEY for the exact metric.",
+        trigger="Green when the 7-day average is at or below 1.00 (long-term-holder profit-taking has dried up).",
+        source="bitcoin-data.com (BGeometrics) free API", series=s.out(digits=4), unit="ratio",
+    )
+
+
 def build_lth(ctx):
     if not GN_KEY:
-        return unavailable("lth", "Long-Term Holder Net Position Change",
-                           "Needs a Glassnode API key (add GLASSNODE_API_KEY as a repo secret). No free source publishes this.",
-                           "Green when the 7-day average flips positive (accumulation).", "Glassnode")
+        return build_lth_sopr(ctx)
     j = http(f"https://api.glassnode.com/v1/metrics/supply/lth_net_change?a=BTC&i=24h&api_key={GN_KEY}")
     s = Series([(from_unix(r["t"]), float(r["v"])) for r in j]).since(TODAY - dt.timedelta(days=365))
     avg7 = sum(s.vals[-7:]) / 7
@@ -431,7 +488,7 @@ def build_lth(ctx):
 def build_whale(ctx):
     if not CQ_KEY:
         return unavailable("whale", "Exchange Whale Ratio",
-                           "Needs a CryptoQuant API key (add CRYPTOQUANT_API_KEY as a repo secret).",
+                           "No free source publishes this. Needs a paid CryptoQuant plan (add CRYPTOQUANT_API_KEY as a repo secret).",
                            "Green below 0.85 (whales no longer dominating exchange deposits).", "CryptoQuant")
     s = cq("flow-indicator/exchange-whale-ratio?exchange=all_exchange&window=day&limit=365")
     avg7 = sum(s.vals[-7:]) / 7
