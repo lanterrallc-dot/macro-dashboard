@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitcoin Liquidity Monitor</title>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f6f6f4; --surface:#fcfcfb; --surface-2:#f0efec; --border:#e2e1dc;
+  --text:#0b0b0b; --text-2:#52514e; --muted:#8a8984;
+  --series:#2a78d6; --neg:#e34948; --grid:#e6e5e0;
+  --good:#0ca30c; --warn:#fab219; --bad:#d03b3b; --na:#9a9993;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#121211; --surface:#1a1a19; --surface-2:#242422; --border:#2e2e2b;
+    --text:#f0efec; --text-2:#c3c2b7; --muted:#8d8c85;
+    --series:#3987e5; --neg:#e66767; --grid:#2a2a27;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#121211; --surface:#1a1a19; --surface-2:#242422; --border:#2e2e2b;
+  --text:#f0efec; --text-2:#c3c2b7; --muted:#8d8c85;
+  --series:#3987e5; --neg:#e66767; --grid:#2a2a27;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--series)}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+h1{font-size:22px;margin:0;letter-spacing:-.01em}
+nav{display:flex;gap:14px;font-size:13px;flex-wrap:wrap}
+.sub{color:var(--text-2);margin:4px 0 18px;font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:14px;margin-bottom:22px}
+@media (max-width:820px){.top{grid-template-columns:1fr}}
+.kicker{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+.regime{font-size:24px;font-weight:650;margin:6px 0 10px;line-height:1.2}
+.tally{display:flex;gap:14px;flex-wrap:wrap;color:var(--text-2);font-size:13px}
+.tally b{color:var(--text)}
+.meter{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin:12px 0 14px;background:var(--surface)}
+.meter span{display:block;height:100%}
+.btc{display:flex;gap:18px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:12px;margin-top:4px}
+.btc .v{font-size:18px;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 9px 2px 7px;border-radius:999px;white-space:nowrap;
+  background:color-mix(in srgb,var(--c) 16%,transparent);color:var(--text);border:1px solid color-mix(in srgb,var(--c) 55%,transparent)}
+.pill i{font-style:normal;color:var(--c);font-size:11px}
+.s-good{--c:var(--good)} .s-warn{--c:var(--warn)} .s-bad{--c:var(--bad)} .s-na{--c:var(--na)}
+.corrhead{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start}
+.corrval{font-size:28px;font-weight:650;line-height:1}
+.corrnote{color:var(--text-2);font-size:12px;margin:6px 0 4px}
+h2{font-size:15px;margin:26px 0 10px;display:flex;align-items:center;gap:10px}
+h2 .pill{font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+@media (max-width:400px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card .row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.card .name{font-weight:600;font-size:13.5px}
+.card .val{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.card.na .val{font-size:15px;color:var(--muted);font-weight:500}
+.detail{color:var(--text-2);font-size:12.5px}
+.trigger{font-size:12px;color:var(--text-2);background:var(--surface-2);border-radius:8px;padding:6px 9px}
+.trigger b{color:var(--text);font-weight:600}
+.src{font-size:11px;color:var(--muted)}
+.spark{position:relative;height:64px}
+.spark svg,.bigchart svg{display:block;width:100%;height:100%;overflow:visible}
+.bigchart{position:relative;height:170px;margin-top:6px}
+.tip{position:absolute;pointer-events:none;background:var(--text);color:var(--surface);font-size:11.5px;padding:4px 7px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-115%);opacity:0;transition:opacity .08s;z-index:5}
+.axis{font-size:10px;fill:var(--muted)}
+footer{margin-top:28px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.stale{color:var(--bad);font-weight:600}
+.err{padding:30px;text-align:center;color:var(--text-2)}
+details.tbl{margin-top:18px;font-size:12.5px} details.tbl summary{cursor:pointer;color:var(--text-2)}
+table{border-collapse:collapse;width:100%;margin-top:8px} td,th{text-align:left;padding:5px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-weight:500}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bitcoin Liquidity Monitor</h1>
+    <nav>
+      <a href="dashboard.html">← Macro / Liquidity Risk Monitor</a>
+      <a href="fiscal.html">Fiscal Dominance</a>
+      <a href="https://lanterrallc-dot.github.io/fxstress/">FX Stress</a>
+    </nav>
+  </header>
+  <p class="sub">Is the downward pressure on BTC easing, and is its link to liquidity coming back? Each signal turns green when its trigger is met.</p>
+  <div id="app"><div class="err">Loading…</div></div>
+  <footer><span id="updated"></span><span>Not investment advice. Thresholds are rules of thumb, not guarantees.</span></footer>
+</div>
+
+<script>
+const LABEL = {good:"Signal met", warn:"Watching", bad:"Not yet", na:"No data"};
+const ICON  = {good:"▲", warn:"◆", bad:"▼", na:"○"};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pill = s => `<span class="pill s-${s}"><i aria-hidden="true">${ICON[s]}</i>${LABEL[s]}</span>`;
+
+function fmtVal(v, unit){
+  if (v == null) return "–";
+  const a = Math.abs(v);
+  if (unit === "$B") return a >= 1000 ? `$${(v/1000).toFixed(2)}T` : `$${v.toFixed(0)}B`;
+  if (unit === "$M") return `${v>0?"+":""}${v.toFixed(0)}M`;
+  if (unit === "%")  return `${v.toFixed(a < 0.1 ? 4 : 2)}%`;
+  if (unit === "BTC") return `${v>0?"+":""}${Math.round(v).toLocaleString()} BTC`;
+  return v.toFixed(3);
+}
+const fmtDate = s => new Date(s + "T00:00:00").toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"});
+
+// Single-series chart: line, step or diverging bars, zero line when range crosses 0, crosshair + tooltip.
+function chart(el, pts, {unit="", kind="line", axes=false, ref=null} = {}){
+  if (!pts || pts.length < 2){ el.innerHTML = `<div class="src" style="padding-top:22px">Not enough history yet.</div>`; return; }
+  const W = el.clientWidth || 320, H = el.clientHeight || 64;
+  const padL = axes ? 34 : 2, padR = 4, padT = 6, padB = axes ? 18 : 4;
+  const xs = pts.map((_, i) => i), ys = pts.map(p => p[1]);
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  if (ref != null){ lo = Math.min(lo, ref); hi = Math.max(hi, ref); }
+  if (kind === "bar"){ lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+  if (hi === lo){ hi += 1; lo -= 1; }
+  const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
+  const X = i => padL + (i / (pts.length - 1)) * (W - padL - padR);
+  const Y = v => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+  let g = "";
+  if (axes){
+    [lo + pad, (lo + hi) / 2, hi - pad].forEach(v => {
+      g += `<line x1="${padL}" x2="${W-padR}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+      g += `<text class="axis" x="${padL-5}" y="${Y(v)+3}" text-anchor="end">${v.toFixed(2)}</text>`;
+    });
+    [0, Math.floor((pts.length-1)/2), pts.length-1].forEach((i, k) => {
+      g += `<text class="axis" x="${X(i)}" y="${H-4}" text-anchor="${["start","middle","end"][k]}">${fmtDate(pts[i][0])}</text>`;
+    });
+  }
+  const zero = (lo < 0 && hi > 0) ? 0 : null;
+  const base = ref != null ? ref : zero;
+  if (base != null) g += `<line x1="${padL}" x2="${W-padR}" y1="${Y(base)}" y2="${Y(base)}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>`;
+  if (kind === "bar"){
+    const bw = Math.max(1, (W - padL - padR) / pts.length - 2);
+    pts.forEach((p, i) => {
+      const y0 = Y(0), y1 = Y(p[1]);
+      g += `<rect x="${X(i) - bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.max(1, Math.abs(y1-y0))}" rx="${Math.min(2, bw/2)}" fill="${p[1] >= 0 ? "var(--series)" : "var(--neg)"}"/>`;
+    });
+  } else {
+    let d = "";
+    pts.forEach((p, i) => {
+      if (i === 0) d = `M${X(0)},${Y(p[1])}`;
+      else d += kind === "step" ? `H${X(i)}V${Y(p[1])}` : `L${X(i)},${Y(p[1])}`;
+    });
+    g += `<path d="${d}" fill="none" stroke="var(--series)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const L = pts.length - 1;
+    g += `<circle cx="${X(L)}" cy="${Y(pts[L][1])}" r="3.5" fill="var(--series)" stroke="var(--surface)" stroke-width="2"/>`;
+  }
+  g += `<line class="xh" y1="${padT}" y2="${H-padB}" stroke="var(--muted)" stroke-width="1" opacity="0"/>`;
+  g += `<circle class="dot" r="4" fill="var(--series)" stroke="var(--surface)" stroke-width="2" opacity="0"/>`;
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="history chart">${g}</svg><div class="tip"></div>`;
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip"), xh = el.querySelector(".xh"), dot = el.querySelector(".dot");
+  const move = ev => {
+    const r = svg.getBoundingClientRect();
+    const cx = ((ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round((cx - padL) / (W - padL - padR) * (pts.length - 1))));
+    const x = X(i), y = Y(pts[i][1]);
+    xh.setAttribute("x1", x); xh.setAttribute("x2", x); xh.setAttribute("opacity", .6);
+    dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("opacity", kind === "bar" ? 0 : 1);
+    tip.innerHTML = `${fmtDate(pts[i][0])} · <b>${fmtVal(pts[i][1], unit)}</b>`;
+    tip.style.left = Math.max(60, Math.min(r.width - 60, x * r.width / W)) + "px";
+    tip.style.top = (y * r.height / H) + "px"; tip.style.opacity = 1;
+  };
+  const leave = () => { tip.style.opacity = 0; xh.setAttribute("opacity", 0); dot.setAttribute("opacity", 0); };
+  svg.addEventListener("pointermove", move); svg.addEventListener("pointerleave", leave);
+  svg.addEventListener("touchmove", move, {passive:true}); svg.addEventListener("touchend", leave);
+}
+
+let DATA = null;
+function render(){
+  const o = DATA, app = document.getElementById("app");
+  const r = o.regime, c = o.correlation;
+  const seg = (n, s) => n ? `<span class="s-${s}" style="flex:${n};background:var(--c)"></span>` : "";
+  const groupStatus = g => {
+    const sc = g.indicators.filter(i => i.status !== "na");
+    if (!sc.length) return "na";
+    const good = sc.filter(i => i.status === "good").length, bad = sc.filter(i => i.status === "bad").length;
+    return good === sc.length ? "good" : bad === sc.length ? "bad" : "warn";
+  };
+  let h = `<div class="top">
+    <div class="panel">
+      <div class="kicker">Overall read</div>
+      ${pill(r.status)}
+      <div class="regime">${esc(r.label)}</div>
+      <div class="meter" aria-hidden="true">${seg(r.good,"good")}${seg(r.warn,"warn")}${seg(r.bad,"bad")}</div>
+      <div class="tally"><span>${ICON.good} <b>${r.good}</b> met</span><span>${ICON.warn} <b>${r.warn}</b> watching</span><span>${ICON.bad} <b>${r.bad}</b> not yet</span><span>${ICON.na} <b>${r.total - r.scored}</b> no data</span></div>
+      ${o.btc ? `<div class="btc" style="margin-top:14px"><div><div class="kicker">BTC</div><div class="v">$${o.btc.price.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+        <div><div class="kicker">30-day</div><div class="v">${o.btc.chg_30d > 0 ? "+" : ""}${o.btc.chg_30d.toFixed(1)}%</div></div></div>` : ""}
+    </div>
+    <div class="panel">
+      <div class="corrhead">
+        <div><div class="kicker">BTC ↔ Fed net liquidity correlation</div>
+          <div class="corrval">${c ? (c.value > 0 ? "+" : "") + c.value.toFixed(2) : "–"}</div></div>
+        ${pill(c ? c.status : "na")}
+      </div>
+      <div class="corrnote">${c ? `${esc(c.note)} Four weeks ago: ${c.prior.toFixed(2)}.` + (c.smoothed_52w != null ? ` 13-week-change version over the last year: ${c.smoothed_52w.toFixed(2)}.` : "") + ` Green above +0.30.` : "Correlation unavailable this run."}</div>
+      <div class="bigchart" id="corrchart"></div>
+    </div>
+  </div>`;
+  o.groups.forEach(g => {
+    h += `<h2>${esc(g.title)} ${pill(groupStatus(g))}</h2><div class="grid">`;
+    g.indicators.forEach(i => {
+      h += `<div class="card ${i.status === "na" ? "na" : ""}">
+        <div class="row"><div class="name">${esc(i.name)}</div>${pill(i.status)}</div>
+        <div class="val">${esc(i.display)}</div>
+        ${i.series && i.series.length ? `<div class="spark" data-id="${i.id}"></div>` : ""}
+        <div class="detail">${esc(i.detail)}</div>
+        <div class="trigger"><b>Trigger:</b> ${esc(i.trigger)}</div>
+        <div class="src">Source: ${esc(i.source)}</div>
+      </div>`;
+    });
+    h += `</div>`;
+  });
+  h += `<details class="tbl"><summary>Table view</summary><table><tr><th>Indicator</th><th>Status</th><th>Value</th><th>Trigger</th></tr>${
+    o.groups.flatMap(g => g.indicators).map(i => `<tr><td>${esc(i.name)}</td><td>${ICON[i.status]} ${LABEL[i.status]}</td><td>${esc(i.display)}</td><td>${esc(i.trigger)}</td></tr>`).join("")
+  }</table></details>`;
+  app.innerHTML = h;
+  if (c) chart(document.getElementById("corrchart"), c.series, {axes:true, ref:0.3});
+  const byId = Object.fromEntries(o.groups.flatMap(g => g.indicators).map(i => [i.id, i]));
+  document.querySelectorAll(".spark").forEach(el => {
+    const i = byId[el.dataset.id];
+    chart(el, i.series, {unit: i.unit, kind: i.chart || "line"});
+  });
+  const t = new Date(o.generated_utc), ageH = (Date.now() - t) / 36e5;
+  document.getElementById("updated").innerHTML = `Data refreshed ${t.toLocaleString()}` + (ageH > 3 ? ` <span class="stale">· ${ageH.toFixed(0)}h old, check the "Refresh BTC monitor" workflow</span>` : "");
+}
+
+async function load(){
+  try {
+    const res = await fetch("btc_output.json?t=" + Date.now(), {cache: "no-store"});
+    if (!res.ok) throw new Error(res.status);
+    DATA = await res.json();
+    render();
+  } catch (e) {
+    if (!DATA) document.getElementById("app").innerHTML = `<div class="err">No data yet. Run the <b>Refresh BTC monitor</b> workflow once from the repo's Actions tab, then reload.</div>`;
+  }
+}
+load();
+setInterval(load, 5 * 60 * 1000);
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => DATA && render(), 150); });
+</script>
+</body>
+</html>
