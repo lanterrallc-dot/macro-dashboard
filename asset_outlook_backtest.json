@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-19T14:09:22.083692+00:00",
+  "generated_at": "2026-10-26T13:43:10.450965+00:00",
   "regime_history": [
     {
       "date": "2018-01-31",
@@ -353,7 +353,7 @@
     },
     {
       "date": "2023-11-30",
-      "regime_new": "Neutral / Balanced",
+      "regime_new": null,
       "regime_old": "Neutral / Balanced"
     },
     {
@@ -616,12 +616,12 @@
         "hit_rate": 0.4
       },
       "Short Treasuries / T-Bills": {
-        "hits": 32,
-        "total": 32,
+        "hits": 31,
+        "total": 31,
         "by_regime": {
           "Neutral / Balanced": {
-            "hits": 22,
-            "total": 22
+            "hits": 21,
+            "total": 21
           },
           "Inflationary Tightening": {
             "hits": 1,
@@ -829,9 +829,9 @@
         "hit_rate": 0.2
       }
     },
-    "overall_hit_rate": 0.463,
-    "hits": 106,
-    "total": 229
+    "overall_hit_rate": 0.461,
+    "hits": 105,
+    "total": 228
   },
   "old_model": {
     "per_asset": {
